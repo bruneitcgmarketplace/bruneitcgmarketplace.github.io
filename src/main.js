@@ -51,7 +51,7 @@ function renderChrome(page) {
   const items = MENU;
   const n = signed ? cartIds().length : 0;
   $top.innerHTML = `<div class="top-row">
-      <a class="brand" href="#/"><span class="logo-aura"><img src="./logo.png" alt="" width="34" height="34"></span><span class="bname"><span class="b1">Brunei One Piece</span> <span class="b2">TCG</span></span></a><span class="grow"></span>
+      <a class="brand" href="#/"><span class="logo-aura"><img src="./logo.png" alt="" width="34" height="34"></span><span class="op" aria-label="Brunei One Piece TCG"><small>Brunei</small> One P<span class="red">I</span>ece <small>TCG</small></span></a><span class="grow"></span>
       <a class="ic-btn ${cur === 'account' ? 'on' : ''}" href="#/account" aria-label="My account" title="My account">${signed ? avatarHtml('sm') : ICON.user}</a>
       <a class="ic-btn ${cur === 'cart' ? 'on' : ''}" href="#/cart" aria-label="View my cart" title="My cart">${ICON.cart}<span class="cart-n" id="cart-n" ${n ? '' : 'hidden'}>${n}</span></a>
     </div>
