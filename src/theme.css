@@ -90,17 +90,28 @@ input:focus,select:focus,textarea:focus { border-color:var(--sanji); box-shadow:
 /* Camera and full-screen photo viewer deliberately stay dark. */
 .vhint { color:#e2e8f0; } .guide i { border-color:var(--straw); }
 
-/* Brunei One Piece TCG wordmark: logo + One Piece title lettering (blue gradient, navy outline, red I) */
-@font-face { font-family:'Lilita One'; src:url('/fonts/lilita-one.woff2') format('woff2'); font-display:swap; }
-#top .brand { display:inline-flex; align-items:center; gap:.45rem; margin-left:.1rem; background:none; border:0; padding:0; }
-.logo-aura { width:36px; height:36px; flex:none; display:block; }
-.logo-aura img { width:36px; height:36px; border-radius:9px; display:block; }
-#top .brand .op { font-family:'Lilita One','Arial Black',Impact,sans-serif; font-weight:400; font-size:1.2rem; line-height:1; letter-spacing:.03em; text-transform:uppercase; white-space:nowrap;
-  background:linear-gradient(180deg,#5fc3ff 0%,#1f86e6 45%,#0b4fb3 100%); -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent;
-  filter:drop-shadow(1px 0 0 #0a1f55) drop-shadow(-1px 0 0 #0a1f55) drop-shadow(0 1px 0 #0a1f55) drop-shadow(0 -1px 0 #0a1f55) drop-shadow(0 2px 0 #0a1f55); }
-#top .brand .op small { font-size:.62em; letter-spacing:.08em; }
-#top .brand .op .red { background:linear-gradient(180deg,#ff6b6b,#d3182a); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-@media (max-width:380px) { #top .brand .op { font-size:1rem; } .logo-aura,.logo-aura img { width:30px; height:30px; } }
+/* Brunei One Piece TCG brand: Gear 5 logo + Conqueror's Haki aura (animated border and corner sparks) */
+@property --ang { syntax:'<angle>'; inherits:false; initial-value:0deg; }
+#top .brand { position:relative; display:inline-flex; align-items:center; gap:.5rem; padding:.22rem .7rem .22rem .26rem; border-radius:14px; background:#fff; margin-left:.1rem; font-size:.95rem; line-height:1.05; }
+#top .brand .bname { display:block; white-space:nowrap; }
+#top .brand .b1 { color:var(--luffy); font-weight:800; } #top .brand .b2 { color:#14080a; font-weight:800; letter-spacing:.08em; display:inline; }
+/* rotating haki border all around */
+#top .brand { border:2px solid transparent; background:linear-gradient(#fff,#fff) padding-box, conic-gradient(from var(--ang), #14080a, #ff2a3a 18%, #14080a 36%, #7a0f1b 52%, #ff5a66 68%, #14080a 84%, #14080a) border-box; animation:haki-spin 3.2s linear infinite; }
+/* pulsing aura glow around the pill */
+#top .brand::after { content:''; position:absolute; inset:-5px; border-radius:19px; z-index:-1; pointer-events:none;
+  background:conic-gradient(from calc(var(--ang) * -1), #ff2a3a55, transparent 30%, #14080a55 55%, transparent 80%, #ff2a3a55);
+  filter:blur(6px); animation:haki-spin 5s linear infinite, haki-pulse 1.8s ease-in-out infinite; }
+.logo-aura { position:relative; width:36px; height:36px; flex:none; display:grid; place-items:center; }
+.logo-aura img { width:34px; height:34px; border-radius:9px; display:block; position:relative; z-index:1; }
+.logo-aura::before { content:''; position:absolute; inset:-3px; border-radius:12px; background:radial-gradient(circle, #ff2a3a 0%, #7a0f1b66 55%, transparent 72%); filter:blur(3px); animation:haki-pulse 1.4s ease-in-out infinite; }
+/* corner sparks */
+.logo-aura::after { content:''; position:absolute; width:5px; height:5px; border-radius:50%; background:#fff; box-shadow:0 0 6px 2px #ff2a3a; top:-3px; right:-3px; z-index:2; animation:haki-spark 2.1s ease-in-out infinite; }
+#top .brand .b2::after { content:''; display:inline-block; width:5px; height:5px; margin-left:.3rem; border-radius:50%; background:#fff; box-shadow:0 0 6px 2px #ff2a3a; vertical-align:middle; animation:haki-spark 2.1s ease-in-out .9s infinite; }
+@keyframes haki-spin { to { --ang:360deg; } }
+@keyframes haki-pulse { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+@keyframes haki-spark { 0%,100% { transform:scale(.3); opacity:.2; } 50% { transform:scale(1.2); opacity:1; } }
+@media (max-width:380px) { #top .brand { font-size:.8rem; padding-right:.5rem; gap:.35rem; } #top .brand .b2 { display:inline; } .logo-aura,.logo-aura img { width:30px; height:30px; } }
+@media (prefers-reduced-motion:reduce) { #top .brand,#top .brand::after,.logo-aura::before,.logo-aura::after,#top .brand .b2::after { animation:none; } }
 .bad-link { color:var(--bad); border-color:var(--bad); }
 #sh-url { width:100%; font-size:.85rem; }
 /* Inventory header: let the Share / Grid / Add buttons wrap neatly on narrow phones */
