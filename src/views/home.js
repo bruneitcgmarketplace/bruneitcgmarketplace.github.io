@@ -1,61 +1,50 @@
-import { setCard } from './exploreSets.js';
-import { sb, state, esc, bnd, bndShort, loadCatalog, loadInv, invStats, refBnd, cardImg, setName, tile, needLogin, bindLogin, rpc, isMember, enlarge } from '../lib.js';
-
-export const setCircle = setCard;
+import '../home.css';
+import { state, sb, esc, loadCatalog, loadInv, tile, bindLogin, rpc } from '../lib.js';
+import { renderHomeStats, renderHomeFeeds } from '../home-content.js';
 
 export async function viewHome($app) {
-  const cat = await loadCatalog();
-  $app.innerHTML = `<div class="loading">Loading…</div>`;
+  await loadCatalog();
+  $app.innerHTML = '<div class="loading">Loading…</div>';
   const signed = !!state.user;
-  if (signed) await loadInv();
+  let feed = {}, feedChecked = 0, lastHtml = '';
   rpc('close_ended_auctions').catch(() => {});
-  const [soon, fresh, counts, mine] = await Promise.all([
-    sb.from('listings').select('*').eq('status', 'active').eq('type', 'auction').gt('ends_at', new Date().toISOString()).order('ends_at').limit(8),
-    sb.from('listings').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(8),
-    sb.from('listings').select('type', { count: 'exact' }).eq('status', 'active').limit(1000),
-    signed ? sb.from('listings').select('id,status,seller_id,buyer_id').or(`seller_id.eq.${state.user.id},buyer_id.eq.${state.user.id}`).in('status', ['reserved']) : { data: [] },
-  ]);
-  const active = counts.data || [], auctions = active.filter((l) => l.type === 'auction').length;
-  const st = signed ? invStats() : null;
-  const waiting = (mine.data || []).length;
-
-  let hero;
-  if (!signed) hero = `<div class="hero"><div class="muted">Welcome</div><h1>Buy, sell and auction One Piece cards in Brunei</h1>
-    <p class="muted">Free to buy and bid. Sell with Buy now for free, or upgrade to run auctions.</p><button class="btn" id="login-btn">Sign in with Google</button></div>`;
-  else hero = `<div class="hero"><div class="muted">Collection value</div><div class="big-num">${bnd(st.value)}</div>
-    <div class="muted">${st.count} cards · ${st.unique} unique · reference prices (Yuyutei JP shop price, converted at ${state.fx.toFixed(5)} BND/JPY)</div>
-    <div class="row tight" style="margin-top:.6rem"><a class="btn" href="#/inventory">Open inventory</a><a class="btn sec" href="#/scan">Scan cards</a></div></div>`;
-
-  const tiles = `<div class="stats">
-    <a class="stat" href="#/market"><b>${active.length}</b><span>For sale</span></a>
-    <a class="stat" href="#/market?type=auction"><b>${auctions}</b><span>Live auctions</span></a>
-    ${signed ? `<a class="stat ${waiting ? 'hot' : ''}" href="#/orders"><b>${waiting}</b><span>Awaiting settlement</span></a>` : ''}
-    ${signed && !isMember() ? `<a class="stat" href="#/membership"><b>⭐</b><span>Unlock auctions</span></a>` : ''}</div>`;
-
-  const row = (title, arr, link) => arr?.length ? `<div class="sec-h"><h2>${title}</h2>${link ? `<a href="${link}">See all</a>` : ''}</div><div class="hscroll">${arr.map(tile).join('')}</div>` : '';
-
-  let insights = '';
-  if (signed && st.unique) {
-    const top = [...st.rows].sort((a, b) => b.v - a.v).slice(0, 5);
-    const bySet = [...st.bySet.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-    const maxV = Math.max(...bySet.map((x) => x[1]), 1);
-    const done = cat.sets.filter((s) => st.owned.get(s.id)).slice(0, 8);
-    insights = `<div class="sec-h"><h2>Your collection</h2></div>
-      <div class="panel"><h3>Top cards</h3>${top.map((r) => `<div class="line" data-ref="${esc(r.c.ref)}">${cardImg(r.c, 'xs')}<div class="grow"><b>${esc(r.c.code)}</b> ${esc(r.c.rarity)}<div class="muted">${esc(r.c.name)} × ${r.q}</div></div><b>${bnd(r.v)}</b></div>`).join('')}</div>
-      <div class="panel"><h3>Value by set</h3>${bySet.map(([id, v]) => `<div class="bar"><span class="bl">${id.toUpperCase()}</span><div class="bt"><i style="width:${(v / maxV) * 100}%"></i></div><span class="bv">${bndShort(v)}</span></div>`).join('')}</div>
-      <div class="sec-h"><h2>Set completion</h2></div>
-      <div class="setgrid">${done.map((s) => setCircle(s, ((st.owned.get(s.id)?.size || 0) / s.count) * 100)).join('')}</div>`;
+  async function getFeed() {
+    if (Date.now() - feedChecked < 10 * 60e3) return feed;
+    try {
+      const response = await fetch(import.meta.env.BASE_URL + 'home-feed.json', {cache:'no-cache',signal:AbortSignal.timeout(10000)});
+      if (!response.ok) throw new Error('Feed unavailable');
+      const data = await response.json();
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Invalid feed');
+      feed = data; feedChecked = Date.now();
+    } catch { /* Keep last-successful data and original source timestamps. */ }
+    return feed;
   }
-
-  const newest = cat.sets.filter((s) => /^(op|eb|prb)/.test(s.id)).slice(0, 12);
-  $app.innerHTML = `${hero}${tiles}
-    ${row('Auctions ending soon', soon.data, '#/market?type=auction')}
-    ${row('Newest listings', fresh.data, '#/market')}
-    ${!active.length ? `<div class="panel center"><p>No listings yet. Be the first to sell a card!</p><a class="btn" href="#/sell">Sell a card</a></div>` : ''}
-    ${insights}
-    <div class="sec-h"><h2>Browse by set</h2><a href="#/explore">All sets</a></div>
-    <div class="setgrid">${newest.map((s) => setCircle(s, null)).join('')}</div>
-    <p class="muted" style="margin-top:1.2rem">Card catalogue and reference prices from Yuyutei, updated ${esc(cat.updated)}. Reference prices are Japanese shop selling prices, not guaranteed local values.</p>`;
-  bindLogin($app);
-  $app.querySelectorAll('.line[data-ref]').forEach((el) => (el.onclick = () => enlarge(state.cat.byRef.get(el.dataset.ref))));
+  const row = (title, result, href, empty) => `<section class="home-live"><div class="sec-h"><h2>${title}</h2><a href="${href}">See all</a></div>${result.error ? '<div class="panel muted">Listings are temporarily unavailable. Please try again shortly.</div>' : result.data?.length ? `<div class="hscroll">${result.data.map(tile).join('')}</div>` : `<div class="panel muted">${empty}</div>`}</section>`;
+  async function refresh() {
+    try {
+      const now = new Date().toISOString();
+      const [inv, listings, auctions, listingCount, auctionCount] = await Promise.all([
+        signed ? loadInv(true).catch(() => null) : null,
+        sb.from('listings').select('*').eq('status','active').eq('type','buy_now').order('created_at',{ascending:false}).limit(8),
+        sb.from('listings').select('*').eq('status','active').eq('type','auction').gt('ends_at',now).order('ends_at').limit(8),
+        sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','buy_now'),
+        sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','auction').gt('ends_at',now),
+        getFeed(),
+      ]);
+      if (!$app.isConnected) return;
+      const totalCards = inv ? [...inv.values()].reduce((sum,q) => sum + (Number.isSafeInteger(q) && q > 0 ? q : 0),0) : null;
+      const hero = signed ? `<div class="hero"><div class="muted">Brunei TCG Marketplace</div><h1>Your One Piece hub</h1><p class="muted">Manage your cards, discover listings and follow the latest updates.</p><div class="row tight"><a class="btn" href="#/inventory">Open inventory</a><a class="btn sec" href="#/scan">Scan cards</a></div></div>` : `<div class="hero"><div class="muted">Welcome</div><h1>Buy, sell and auction One Piece cards in Brunei</h1><p class="muted">Free to buy and bid. Sell with Buy now for free, or upgrade to run auctions.</p><button class="btn" id="login-btn">Sign in with Google</button></div>`;
+      const html = `${hero}${renderHomeStats({signed,totalCards,listingCount:listingCount.error ? null : listingCount.count,auctionCount:auctionCount.error ? null : auctionCount.count})}
+        ${row('Live listing',listings,'#/market?type=buy_now','No buy-now listings yet. Sell a card to get started.')}
+        ${row('Live auction',auctions,'#/market?type=auction','No live auctions right now. Check back soon.')}
+        ${renderHomeFeeds(feed)}
+        <p class="feed-meta home-refresh-note">Live counts refresh every minute. News, releases and Yuyutei sources refresh automatically every six hours. Reference prices are Japanese shop prices, not guaranteed local values.</p>`;
+      if (html !== lastHtml) { $app.innerHTML = html; lastHtml = html; bindLogin($app); }
+    } catch (error) {
+      if ($app.isConnected && !lastHtml) $app.innerHTML = `<div class="notice err">Home could not load. ${esc(error.message || error)}</div>${renderHomeFeeds(feed)}`;
+    } finally {
+      if ($app.isConnected) setTimeout(refresh,60000);
+    }
+  }
+  await refresh();
 }

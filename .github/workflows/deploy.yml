@@ -2,6 +2,8 @@ name: Deploy to GitHub Pages
 on:
   push: { branches: [main] }
   workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: true }
 jobs:
@@ -12,6 +14,12 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - name: Test Home and product photo coverage
+        run: node --test tools/home-*.test.mjs tools/set-photos.test.mjs
+      - name: Refresh official news, release dates and Yuyutei cards
+        run: node tools/refresh_home_feed.mjs
+        env:
+          HOME_FEED_PREVIOUS_URL: https://bruneitcgmarketplace.github.io/home-feed.json
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
