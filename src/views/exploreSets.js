@@ -3,7 +3,7 @@ import { sb, state, esc, bnd, loadCatalog, loadInv, refBnd, cardImg, sheet } fro
 
 // ---------- set icon (booster box) ----------
 const GROUPS = [
-  ['op', 'Booster packs', 'OP', ['#e0343c', '#7d1520']],
+  ['op', 'Booster boxes', 'OP', ['#e0343c', '#7d1520']],
   ['eb', 'Extra boosters', 'EB', ['#f5b82e', '#9a5a05']],
   ['prb', 'Premium boosters', 'PRB', ['#a24ee0', '#4a1a78']],
   ['st', 'Starter decks', 'ST', ['#2c8fe0', '#0f3d78']],

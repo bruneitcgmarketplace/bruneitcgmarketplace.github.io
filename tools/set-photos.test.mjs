@@ -3,6 +3,10 @@ import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 const source = readFileSync(new URL('../src/views/exploreSets.js', import.meta.url), 'utf8');
+test('Explore category and set-type filter use Booster boxes, not Booster packs', () => {
+  assert.match(source, /\['op', 'Booster boxes', 'OP'/);
+  assert.doesNotMatch(source, /Booster packs/);
+});
 const section = source.split('// ---------- card details')[0].replace(/^import .*;$/gm, '').replace(/export /g, '').replace(/import\.meta\.env\.BASE_URL/g, "'/'");
 const render = vm.runInNewContext(section + '\nsetIcon', { esc: (s) => String(s).replaceAll('"', '&quot;') });
 test('set tiles render a real local product photo without drawn box art, even on a fresh Home visit', () => {
