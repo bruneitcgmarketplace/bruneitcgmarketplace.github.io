@@ -12,10 +12,9 @@ export async function viewAccount($app) {
     <div class="acc-list">
       ${tile('#/orders', '🧾', 'Orders', 'What you bought, sold and bid on')}
       ${tile('#/mylistings', '🏷️', 'My listings', 'Active, reserved and ended listings')}
-      ${tile('#/cart', '🛒', 'My cart', 'Saved buy-now cards')}
-      ${tile('#/inventory', '📦', 'My collection', 'Cards you own and their value')}
       ${tile('#/membership', '⭐', 'Membership', isMember() ? 'Manage your plan' : 'Unlock auctions for sellers')}
       ${tile('#/settings', '⚙️', 'Settings', 'Name, WhatsApp, exchange rate, images')}
+      ${state.me?.is_admin ? tile('#/admin', '🛡️', 'Admin', 'Users, listings and reports') : ''}
     </div>
     <p style="margin-top:1rem"><button class="btn sec" id="so">Sign out</button></p>`;
   $app.querySelector('#so').onclick = signOut;

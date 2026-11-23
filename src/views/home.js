@@ -1,10 +1,7 @@
+import { setCard } from './exploreSets.js';
 import { sb, state, esc, bnd, bndShort, loadCatalog, loadInv, invStats, refBnd, cardImg, setName, tile, needLogin, bindLogin, rpc, isMember, enlarge } from '../lib.js';
 
-export const setCircle = (s, pct) => {
-  const deg = Math.round((pct || 0) * 3.6);
-  return `<a class="setc" href="#/set/${s.id}"><div class="ring" style="--deg:${deg}deg"><span>${s.id.toUpperCase()}</span></div>
-    <div class="sn">${esc(s.name)}</div>${pct != null ? `<div class="muted">${Math.round(pct)}%</div>` : ''}</a>`;
-};
+export const setCircle = setCard;
 
 export async function viewHome($app) {
   const cat = await loadCatalog();

@@ -1,15 +1,8 @@
 import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc } from '../lib.js';
-import { setCircle } from './home.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
 
-export async function viewExplore($app) {
-  const cat = await loadCatalog();
-  if (state.user) await loadInv();
-  const owned = new Map();
-  for (const [ref] of state.inv || []) { const c = cat.byRef.get(ref); if (c) (owned.get(c.set) || owned.set(c.set, new Set()).get(c.set)).add(c.code); }
-  $app.innerHTML = `<h1>Card sets</h1><p class="muted">Browse every One Piece set. ${state.user ? 'Rings show how much of each set you own.' : 'Sign in to see how much of each set you own.'}</p><div class="setgrid">${cat.sets.map((s) => setCircle(s, state.user ? ((owned.get(s.id)?.size || 0) / s.count) * 100 : null)).join('')}</div>`;
-}
+export { viewExplore } from './exploreSets.js';
 
 export async function viewMarket($app) {
   const cat = await loadCatalog();

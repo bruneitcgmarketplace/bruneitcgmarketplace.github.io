@@ -7,3 +7,4 @@ tools/scantest/img/
 tools/scantest/*.npy
 tools/scantest/__pycache__/
 tools/__pycache__/
+tools/scantest/photos/
