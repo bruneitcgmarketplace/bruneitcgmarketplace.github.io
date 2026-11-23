@@ -216,3 +216,11 @@ export async function cardPicker(onPick, { title = 'Find a card' } = {}) {
 export function enlarge(c) {
   import('./lightbox.js').then((m) => m.openLightbox([catImg(c, 'front')], 0, [`${c.code} ${c.name}`]));
 }
+
+// Avatar: coloured initial underneath, Google photo on top. If the photo is blocked or missing, the initial shows.
+export function avatarHtml(size = 'md') {
+  const u = state.user; if (!u) return '';
+  const name = u.user_metadata?.full_name || state.me?.display_name || u.email || '?';
+  const pic = u.user_metadata?.avatar_url || u.user_metadata?.picture;
+  return `<span class="av ${size}">${esc(String(name).trim()[0]?.toUpperCase() || '?')}${pic ? `<img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
+}
