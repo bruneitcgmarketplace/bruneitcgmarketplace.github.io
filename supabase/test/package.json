@@ -1,0 +1,1 @@
+{"name":"schema-test","private":true,"type":"module","dependencies":{"@electric-sql/pglite":"latest"}}
