@@ -1,0 +1,77 @@
+/* White canvas; Straw Hat crew colours. Keep gold decorative, not body text. */
+:root {
+  color-scheme:light;
+  --bg:#ffffff; --bg2:#f7f8fa; --card:#ffffff; --card2:#ffffff;
+  --line:#dce2e9; --fg:#182538; --muted:#536174;
+  --luffy:#c92532; --straw:#f2c14e; --zoro:#187247;
+  --nami:#a94c0b; --sanji:#1964a3; --robin:#7446a6;
+  --accent:#a94c0b; --red:#c92532; --red2:#c92532;
+  --ok:#187247; --bad:#be2333; --info:#1964a3;
+  --shadow:0 3px 16px #1825380a;
+}
+html,body { background:#fff; }
+body { background-image:none; }
+#top { background:#fffffff5; border-bottom:1px solid var(--line); box-shadow:0 2px 12px #18253808; }
+#top::after { height:3px; background:linear-gradient(90deg,var(--luffy) 0% 28%,var(--straw) 28% 46%,var(--zoro) 46% 64%,#e68125 64% 82%,var(--sanji) 82%); }
+.brand .b1 { color:var(--luffy); } .brand .b2 { color:var(--fg); }
+.ic-btn,#top .menu-btn { background:#fff; color:var(--sanji); border-color:var(--line); }
+.ic-btn:hover,.ic-btn.on { background:#edf5fc; border-color:var(--sanji); color:var(--sanji); }
+.cart-n { border-color:#fff; }
+.menu-bar a { --crew:var(--luffy); --crew-tint:#fff0f1; background:#f7f8fa; color:var(--muted); border-color:#e8ecf0; }
+.menu-bar a[href="#/market"] { --crew:var(--sanji); --crew-tint:#edf5fc; }
+.menu-bar a[href="#/explore"] { --crew:var(--nami); --crew-tint:#fff4e8; }
+.menu-bar a[href="#/sell"] { --crew:var(--zoro); --crew-tint:#eaf6ef; }
+.menu-bar a[href="#/inventory"] { --crew:var(--robin); --crew-tint:#f4eefb; }
+.menu-bar a[href="#/scan"] { --crew:var(--sanji); --crew-tint:#edf5fc; }
+.menu-bar a:hover { background:var(--crew-tint); color:var(--crew); border-color:var(--crew); }
+.menu-bar a.on { background:var(--crew); color:#fff; border-color:var(--crew); box-shadow:0 2px 8px #18253812; }
+#drawer { background:#fff; } .dr-list a:hover { background:#f7f8fa; }
+.dr-head { background:var(--luffy); } .dr-head .brand .b1 { color:var(--straw); }
+.dr-list a.on { background:#fff0f1; color:var(--luffy); border-left-color:var(--luffy); }
+.btn { background:var(--luffy); box-shadow:0 3px 9px #c925321a; }
+.btn:hover { filter:brightness(.96); box-shadow:0 4px 12px #c9253226; }
+.btn.sec { background:#fff; color:var(--fg); border-color:var(--line); box-shadow:none; }
+.btn.sec:hover { background:#f7f8fa; }
+.btn.ok { background:var(--zoro); color:#fff; }
+.btn.bad { background:#fff1f2; color:var(--bad); }
+.btn.gold { background:var(--straw); color:#493000; box-shadow:none; }
+a.btn[href="#/sell"] { background:var(--zoro); }
+input,select,textarea { background:#fff; }
+input::placeholder,textarea::placeholder { color:#667487; opacity:1; }
+input:focus,select:focus,textarea:focus { border-color:var(--sanji); box-shadow:0 0 0 3px #1964a31a; }
+:focus-visible { outline:3px solid var(--sanji); }
+.panel,.stat,.tile,.order,.sheet,.acc-tile { background:#fff; }
+.hero,.acc-head { background:linear-gradient(115deg,#fff9e9,#fff 65%,#fff0f1); border-color:#ead9b4; box-shadow:var(--shadow); }
+.hero { border-top:4px solid var(--straw); }
+.hero::after { color:var(--luffy); opacity:.05; }
+.big-num { color:var(--nami); text-shadow:none; }
+.stat { border-top:3px solid var(--sanji); }
+.stat:nth-child(2) { border-top-color:var(--luffy); }
+.stat:nth-child(3) { border-top-color:var(--zoro); }
+.stat:nth-child(4) { border-top-color:var(--straw); }
+.stat b { color:var(--sanji); } .stat:nth-child(2) b { color:var(--luffy); } .stat:nth-child(3) b { color:var(--zoro); }
+.tile:hover { border-color:var(--sanji); box-shadow:0 8px 22px #18253814; }
+.price { color:var(--nami); }
+.badge.bn { background:var(--zoro); border-color:var(--zoro); }
+.badge.warn { background:var(--straw); border-color:var(--straw); color:#493000; }
+.chip { background:#f7f8fa; } .chip.ok { color:var(--zoro); } .chip.bad { color:var(--bad); }
+.notice { color:#85400b; border-color:#e4bd75; background:#fffaed; }
+.notice.err { color:var(--bad); background:#fff1f2; border-color:#edb3ba; }
+.notice.ok { color:var(--zoro); background:#edf8f1; border-color:#a7d4b9; }
+.seg a.on { background:var(--luffy); box-shadow:none; }
+.sec-h h2::before { background:linear-gradient(var(--luffy) 50%,var(--straw) 50%); }
+.ring { background:conic-gradient(var(--zoro) var(--deg,0deg),var(--line) 0); box-shadow:none; }
+.bt i,.obar i { background:linear-gradient(90deg,var(--zoro),#6cb88b); }
+.detail img.main { box-shadow:0 6px 24px #1825381a; }
+.pick:hover,.x-btn:hover { background:#f7f8fa; }
+#toast { background:#fff; color:var(--fg); border-color:var(--sanji); }
+.cart-total { border-color:var(--sanji); }
+.acc-ic { background:#edf5fc; }
+.av.lg { box-shadow:0 3px 12px #18253818; border-color:var(--straw); }
+.acc-tile:nth-child(3n+2) .acc-ic { background:#eaf6ef; }
+.acc-tile:nth-child(3n) .acc-ic { background:#fff4e8; }
+.sbox { filter:drop-shadow(0 4px 6px #1825381a); }
+.fchip { background:#fff4e8; border-color:#e8be94; color:var(--nami); }
+.fc { background:#fff; } .fc.on { background:var(--luffy); border-color:var(--luffy); }
+/* Camera and full-screen photo viewer deliberately stay dark. */
+.vhint { color:#e2e8f0; } .guide i { border-color:var(--straw); }

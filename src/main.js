@@ -1,4 +1,5 @@
 import './style.css';
+import './theme.css';
 import { initLightbox } from './lightbox.js';
 import { viewCart } from './views/cart.js';
 import { viewAccount } from './views/account.js';
