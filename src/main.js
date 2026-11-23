@@ -5,6 +5,7 @@ import { viewCart } from './views/cart.js';
 import { viewAccount } from './views/account.js';
 import { cartIds } from './cart.js';
 import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, signOut, isMember, fmtLeft, initHd, avatarHtml } from './lib.js';
+import { viewShared } from './views/shared.js';
 import { viewHome } from './views/home.js';
 import { viewInventory } from './views/inventory.js';
 import { viewExplore, viewMarket, viewSet, viewCard } from './views/explore.js';
@@ -38,7 +39,7 @@ const MENU = [
   ['scan', '📷', 'Scan', '#/scan'],
 ];
 // My listings, Orders, Membership, Settings and Admin live under My account (top right), not in this bar
-const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore', mylistings: 'account', orders: 'account', membership: 'account', settings: 'account', admin: 'account' }[page] || page || 'home');
+const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore', mylistings: 'account', orders: 'account', membership: 'account', settings: 'account', admin: 'account', shared: 'inventory' }[page] || page || 'home');
 const ICON = {
   user: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
   cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.1l2-8H6.4"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
@@ -50,7 +51,7 @@ function renderChrome(page) {
   const items = MENU;
   const n = signed ? cartIds().length : 0;
   $top.innerHTML = `<div class="top-row">
-      <a class="brand" href="#/"><span class="b1">Brunei TCG</span> <span class="b2">Marketplace</span></a><span class="grow"></span>
+      <a class="brand" href="#/"><span class="logo-aura"><img src="./logo.png" alt="" width="34" height="34"></span><span class="bname"><span class="b1">Brunei One Piece</span> <span class="b2">TCG</span></span></a><span class="grow"></span>
       <a class="ic-btn ${cur === 'account' ? 'on' : ''}" href="#/account" aria-label="My account" title="My account">${signed ? avatarHtml('sm') : ICON.user}</a>
       <a class="ic-btn ${cur === 'cart' ? 'on' : ''}" href="#/cart" aria-label="View my cart" title="My cart">${ICON.cart}<span class="cart-n" id="cart-n" ${n ? '' : 'hidden'}>${n}</span></a>
     </div>
@@ -82,6 +83,7 @@ async function route() {
       case 'set': await viewSet(target, arg); break;
       case 'card': await viewCard(target, decodeURIComponent(arg || '')); break;
       case 'scan': await viewScan(target); break;
+      case 'shared': await viewShared(target, arg); break;
       case 'orders': await viewOrders(target); break;
       case 'settings': await viewSettings(target); break;
       case 'listing': await viewListing(target, arg, (fn) => { if (ok()) unsub = fn; else fn(); }); break;

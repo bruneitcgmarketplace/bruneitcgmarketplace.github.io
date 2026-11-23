@@ -15,6 +15,7 @@ await db.exec(stub);
 await db.exec(readFileSync(new URL('../01_schema.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../03_inventory.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../04_admin.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../05_share.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -166,6 +167,23 @@ await as(boss, `select admin_set_strikes($1, 0)`, [buyer2]);
 ok('admin resets strikes', (await as(buyer2, `select strikes from private_profiles where id = $1`, [buyer2])).rows[0].strikes === 0);
 await as(boss, `select admin_grant_membership($1, 0)`, [buyer2]);
 ok('admin revokes membership (days <= 0)', !(await as(boss, `select is_member($1) m`, [buyer2])).rows[0].m);
+
+// --- inventory sharing
+await as(seller, `select inventory_adjust('op01-1', 3)`); await as(seller, `select inventory_adjust('op01-2', 1)`);
+ok('anon cannot create a share link', await fails(null, `select share_inventory()`, [], 'Sign in first'));
+const tok = (await as(seller, `select share_inventory() t`)).rows[0].t;
+ok('share token is long and random', typeof tok === 'string' && tok.length >= 32);
+ok('share link is stable for same owner', (await as(seller, `select share_inventory() t`)).rows[0].t === tok);
+ok('my_inventory_share returns token', (await as(seller, `select my_inventory_share() t`)).rows[0].t === tok);
+ok('other user has no share', (await as(buyer, `select my_inventory_share() t`)).rows[0].t === null);
+const sh = (await as(null, `select get_shared_inventory($1) j`, [tok])).rows[0].j;
+ok('anon can read shared inventory', sh.items.length === 2 && sh.items.find((i) => i.card_ref === 'op01-1').qty === 3 && !!sh.owner);
+ok('shared data has no contact info', !JSON.stringify(sh).includes('6737123456'));
+ok('bad token rejected', await fails(null, `select get_shared_inventory('nope')`, [], 'not valid'));
+ok('share table not readable directly', (await as(buyer, `select * from inventory_shares`)).rows.length === 0);
+await as(seller, `select unshare_inventory()`);
+ok('link dies after unshare', await fails(null, `select get_shared_inventory($1)`, [tok], 'not valid'));
+ok('new link differs after re-share', (await as(seller, `select share_inventory() t`)).rows[0].t !== tok);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

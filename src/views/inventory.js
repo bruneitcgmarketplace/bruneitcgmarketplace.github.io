@@ -1,4 +1,5 @@
 import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet } from '../lib.js';
+import { openShareSheet } from './shared.js';
 
 export async function viewInventory($app) {
   if (!state.user) { $app.innerHTML = `<h1>Inventory</h1>${needLogin('track your collection')}`; return bindLogin($app); }
@@ -18,7 +19,7 @@ export async function viewInventory($app) {
     const sorters = { value: (a, b) => b.v - a.v, code: (a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref), qty: (a, b) => b.q - a.q, name: (a, b) => a.c.name.localeCompare(b.c.name) };
     rows.sort(sorters[f.sort] || sorters.value);
     const sets = [...new Set(st.rows.map((r) => r.c.set))];
-    $app.innerHTML = `<div class="head"><h1>Inventory</h1><div class="row tight"><button class="btn sec" id="vm">${view === 'list' ? '▦ Grid' : '☰ List'}</button><button class="btn" id="add">+ Add card</button></div></div>
+    $app.innerHTML = `<div class="head"><h1>Inventory</h1><div class="row tight"><button class="btn sec" id="share">🔗 Share</button><button class="btn sec" id="vm">${view === 'list' ? '▦ Grid' : '☰ List'}</button><button class="btn" id="add">+ Add card</button></div></div>
       <div class="hero small"><div class="muted">Value</div><div class="big-num">${bnd(st.value)}</div><div class="muted">${st.count} cards · ${st.unique} unique</div></div>
       <div class="panel"><div class="row"><input id="q" placeholder="Search your cards" value="${esc(f.q)}">
         <select id="set"><option value="">All sets</option>${sets.map((s) => `<option value="${s}" ${f.set === s ? 'selected' : ''}>${esc(s.toUpperCase() + ' · ' + setName(s))}</option>`).join('')}</select>
@@ -47,6 +48,7 @@ export async function viewInventory($app) {
     const upd = () => { f.q = $('#q').value; f.set = $('#set').value; f.sort = $('#sort').value; sessionStorage.setItem('invf', JSON.stringify(f)); };
     $('#q').oninput = () => { upd(); clearTimeout(bind.t); bind.t = setTimeout(() => { draw(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); };
     $('#set').onchange = () => { upd(); draw(); }; $('#sort').onchange = () => { upd(); draw(); };
+    $('#share').onclick = guard(() => openShareSheet(state.me?.display_name ? state.me.display_name + '’s' : 'my'));
     $('#vm').onclick = () => { localStorage.setItem('view_inv', view === 'list' ? 'grid' : 'list'); viewInventory($app); };
     const addCard = () => cardPicker(guard(async (c) => { await invAdjust(c.ref, 1); toast(`${c.code} added`); draw(); }), { title: 'Add to inventory' });
     $('#add').onclick = addCard; const a2 = $('#add2'); if (a2) a2.onclick = addCard;
