@@ -1,4 +1,4 @@
-// Explore: every One Piece set (booster-box style icon, "OP18 - The Dominance of God" under it) with a full filter panel.
+// Explore: One Piece sets with actual product photos and a full filter panel.
 import { sb, state, esc, bnd, loadCatalog, loadInv, refBnd, cardImg, sheet } from '../lib.js';
 
 // ---------- set icon (booster box) ----------
@@ -12,28 +12,13 @@ export const groupOf = (id) => (/^(op|eb|prb|st)/.exec(id) || [])[1] || 'op';
 const numOf = (id) => parseInt(id.replace(/\D/g, ''), 10) || 0;
 export const setLabel = (s) => `${s.id.toUpperCase()} - ${s.name.replace(/^(Starter Deck|Extra Booster|Premium Booster)\s*\d*:?\s*/i, '')}`;
 
-// A drawn booster box: front panel in the set colour, lid, pirate mark and the set code.
-// optional official pictures: list them in public/sets/index.json as {"op18": "op18.webp"}
-const pics = new Map();
-export async function loadSetPics() { try { const r = await fetch(import.meta.env.BASE_URL + 'sets/index.json'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) Object.entries(await r.json()).forEach(([k, v]) => pics.set(k, v)); } catch { /* none */ } }
+// Local product photos: predictable paths work on first Home load and offline.
+// All assets share a 400px white canvas; sources are recorded in public/sets/sources.json.
 export function setIcon(s) {
-  const g = GROUPS.find((x) => x[0] === groupOf(s.id)) || GROUPS[0], [c1, c2] = g[3], code = s.id.toUpperCase(), uid = 'g' + s.id;
-  const long = code.length > 4;
-  return `<span class="sbox"><svg viewBox="0 0 120 120" role="img" aria-label="${esc(code)} booster box">
-    <defs><linearGradient id="${uid}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>
-    <linearGradient id="${uid}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c2}"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient></defs>
-    <ellipse cx="60" cy="110" rx="42" ry="5" fill="#000" opacity=".35"/>
-    <path d="M18 38 L74 38 L74 104 L18 104 Z" fill="url(#${uid}f)" stroke="#ffffff55" stroke-width="1.2"/>
-    <path d="M74 38 L100 26 L100 92 L74 104 Z" fill="url(#${uid}s)" stroke="#ffffff33" stroke-width="1"/>
-    <path d="M18 38 L44 26 L100 26 L74 38 Z" fill="#ffffff" opacity=".26" stroke="#ffffff55" stroke-width="1"/>
-    <rect x="18" y="38" width="56" height="9" fill="#ffc83d"/>
-    <text x="46" y="45.2" text-anchor="middle" font-size="6.6" font-weight="800" fill="#2a1a00" font-family="system-ui,sans-serif" letter-spacing="1.2">ONE PIECE</text>
-    <text x="46" y="${long ? 78 : 80}" text-anchor="middle" font-size="${long ? 17 : 22}" font-weight="900" fill="#fff" font-family="system-ui,sans-serif" stroke="#00000055" stroke-width=".6">${esc(code)}</text>
-    <text x="46" y="98" text-anchor="middle" font-size="9" fill="#ffffffcc">☠</text>
-    <path d="M24 52 Q46 58 68 52" stroke="#ffffff55" fill="none" stroke-width="1.2"/></svg>
-    ${pics.has(s.id) ? `<img class="spic" src="${import.meta.env.BASE_URL}sets/${esc(pics.get(s.id))}" alt="${esc(code)}" loading="lazy" onerror="this.remove()">` : ''}</span>`;
+  const code = s.id.toUpperCase(), type = groupOf(s.id) === 'st' ? 'starter deck' : 'booster box';
+  return `<span class="sbox"><img class="spic" src="${import.meta.env.BASE_URL}sets/${esc(s.id)}.webp" alt="${esc(code)} ${type}" width="400" height="400" loading="lazy" decoding="async" onerror="this.hidden=true;this.parentElement.classList.add('missing')"><span class="set-photo-fallback">${esc(code)}<small>Photo unavailable</small></span></span>`;
 }
-export const setCard = (s, pct) => `<a class="setc" href="#/set/${s.id}">${setIcon(s)}<div class="sn"><b>${esc(s.id.toUpperCase())}</b> - ${esc(s.name.replace(/^(Starter Deck|Extra Booster|Premium Booster)\s*\d*:?\s*/i, ''))}</div>${pct != null ? `<div class="obar"><i style="width:${Math.round(pct)}%"></i></div>` : ''}</a>`;
+export const setCard = (s, pct) => `<a class="setc" href="#/set/${s.id}">${setIcon(s)}<div class="sn"><b>${esc(s.id.toUpperCase())}</b><span class="set-name">${esc(s.name.replace(/^(Starter Deck|Extra Booster|Premium Booster)\s*\d*:?\s*/i, ''))}</span></div>${pct != null ? `<div class="obar"><i style="width:${Math.round(pct)}%"></i></div>` : ''}</a>`;
 
 // ---------- card details for the stat filters (cost, power, ...) ----------
 let info = null;
@@ -97,7 +82,7 @@ const GRP_ORDER = { op: 3, eb: 2, prb: 1, st: 0 };
 const setKeyOf = (id) => (GRP_ORDER[groupOf(id)] ?? 0) * 1000 + numOf(id);
 
 export async function viewExplore($app) {
-  const cat = await loadCatalog(); await loadSetPics();
+  const cat = await loadCatalog();
   if (state.user) await loadInv();
   const inv = state.inv || new Map();
   const f = Object.assign(FRESH(), JSON.parse(sessionStorage.getItem('xf') || '{}'));
