@@ -214,6 +214,5 @@ export async function cardPicker(onPick, { title = 'Find a card' } = {}) {
 }
 
 export function enlarge(c) {
-  const s = sheet(`<img class="big" src="${esc(catImg(c, '250_350'))}" alt=""><p><b>${esc(c.code)}</b> ${esc(c.rarity)}<br>${esc(c.name)}</p><p class="muted">${esc(setName(c.set))}</p>`);
-  sharpen(s.el.querySelector('img.big'), catImg(c, 'front'));
+  import('./lightbox.js').then((m) => m.openLightbox([catImg(c, 'front')], 0, [`${c.code} ${c.name}`]));
 }

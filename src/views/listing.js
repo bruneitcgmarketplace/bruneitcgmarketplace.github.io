@@ -1,3 +1,4 @@
+import { addToCart, removeFromCart, inCart } from '../cart.js';
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
@@ -19,7 +20,7 @@ export async function viewListing($app, id, setUnsub) {
 
     let actions = '';
     if (!uid && live) actions = `<p class="muted">Sign in to ${l.type === 'auction' ? 'bid' : 'buy'}.</p><button class="btn" id="login">Sign in with Google</button>`;
-    else if (live && !isSeller && l.type === 'buy_now') actions = `<button class="btn" id="buy">Buy now · ${bnd(l.price)}</button>
+    else if (live && !isSeller && l.type === 'buy_now') actions = `<div class="row tight"><button class="btn" id="buy">Buy now · ${bnd(l.price)}</button><button class="btn sec" id="cart">${inCart(l.id) ? '✓ In cart · Remove' : '🛒 Add to cart'}</button></div>
       <p class="muted">Nothing is charged on this site. Buying reserves the card; you and the seller then arrange payment and meet-up on WhatsApp.</p>`;
     else if (live && !isSeller) actions = l.current_bidder === uid
       ? `<div class="notice ok">You are the highest bidder.</div>`
@@ -60,9 +61,10 @@ export async function viewListing($app, id, setUnsub) {
     const mainImg = $app.querySelector('#mainimg');
     sharpen(mainImg, sharp(photos[0] || ''));
     $app.querySelectorAll('.thumbs img').forEach((i) => (i.onclick = () => { mainImg.src = small(i.dataset.src); sharpen(mainImg, sharp(i.dataset.src)); }));
-    mainImg.style.cursor = 'zoom-in'; mainImg.onclick = () => window.open(sharp(photos[0] || ''), '_blank', 'noopener');
+
     const on = (sel, fn) => { const el = $app.querySelector('#' + sel); if (el) el.onclick = guard(fn); };
     on('login', signIn);
+    on('cart', async () => { if (inCart(id)) { removeFromCart(id); toast('Removed from cart'); } else { addToCart(id); toast('Added to cart'); } draw(); });
     on('buy', async () => { if (!(await confirmSheet('Reserve this card?', 'You will arrange payment and meet-up with the seller on WhatsApp.', 'Reserve'))) return; await rpc('buy_now', { p_listing: id }); toast('Reserved. Contact the seller.'); draw(); });
     on('bid', async () => { await rpc('place_bid', { p_listing: id, p_amount: Number($app.querySelector('#amt').value) }); toast('Bid placed'); draw(); });
     on('cancel', async () => { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); draw(); });

@@ -19,7 +19,7 @@ export async function viewSettings($app) {
       <label>Manual rate override (BND per JPY, empty = automatic)</label><div class="row tight"><input id="fx" inputmode="decimal" value="${esc(localStorage.getItem('fx_manual') || '')}" style="max-width:160px"><button class="btn sec" id="fx-s">Apply</button></div></div>
     ${signed ? `<div class="panel"><h2>Data</h2><button class="btn sec" id="exp">Export inventory (CSV)</button></div>` : ''}
     <div class="panel"><h2>App</h2>${installEvt ? `<button class="btn" id="inst">Install app</button>` : `<p class="muted">Install: open the browser menu and choose "Add to Home screen" (iPhone: Share, then Add to Home Screen).</p>`}
-      <p class="muted">Brunei TCG Market · One Piece Card Game. Not affiliated with Bandai or Yuyutei. Deals are settled directly between buyer and seller; the site does not handle payments.</p></div>
+      <p class="muted">Brunei TCG Marketplace · One Piece Card Game. Not affiliated with Bandai or Yuyutei. Deals are settled directly between buyer and seller; the site does not handle payments.</p></div>
     ${me?.is_admin ? `<div class="panel"><a class="btn sec" href="#/admin">Open admin</a></div>` : ''}
     ${signed ? `<p><button class="btn sec" id="so">Sign out</button></p>` : ''}`;
   bindLogin($app);
