@@ -114,3 +114,5 @@ input:focus,select:focus,textarea:focus { border-color:var(--sanji); box-shadow:
 @media (prefers-reduced-motion:reduce) { #top .brand,#top .brand::after,.logo-aura::before,.logo-aura::after,#top .brand .b2::after { animation:none; } }
 .bad-link { color:var(--bad); border-color:var(--bad); }
 #sh-url { width:100%; font-size:.85rem; }
+/* Inventory header: let the Share / Grid / Add buttons wrap neatly on narrow phones */
+.head { flex-wrap:wrap; } .head .row.tight { flex-wrap:wrap; gap:.4rem; } .head .btn { padding:.45rem .7rem; }
