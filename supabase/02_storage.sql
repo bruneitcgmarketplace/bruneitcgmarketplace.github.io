@@ -1,6 +1,6 @@
 -- Public bucket for listing photos; users can only write inside their own folder (<uid>/...)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('listing-photos', 'listing-photos', true, 1048576, array['image/jpeg','image/png','image/webp'])
+values ('listing-photos', 'listing-photos', true, 3145728, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do nothing;
 
 create policy "photos public read" on storage.objects for select using (bucket_id = 'listing-photos');

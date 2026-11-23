@@ -89,8 +89,37 @@ export async function loadCatalog() {
   state.cat = { updated: raw.updated, cards, byRef, byCode, bySet, sets, setNames: raw.sets, rawRefs: raw.cards.map((r) => r[1] + '-' + r[0]) };
   return state.cat;
 }
-export const catImg = (c, size = '200_280') => `https://card.yuyu-tei.jp/opc/${size}/${c.set}/${c.num}.jpg`;
-export const cardImg = (c, cls = '') => `<img class="${cls}" loading="lazy" src="${esc(catImg(c))}" alt="${esc(c.code)}" onerror="this.style.visibility='hidden'">`;
+// Yuyutei only serves these sizes: 100_140, 200_280, 250_350 and 'front' (500x700). Anything else is a 404.
+export const IMG_BASE = 'https://card.yuyu-tei.jp/opc/';
+export const catImg = (c, size = '250_350') => `${IMG_BASE}${size}/${c.set}/${c.num}.jpg`;
+// Re-point a catalogue image URL (e.g. one stored in an older listing) at another size; other URLs (seller photos) are untouched.
+export const upImg = (url, size = '250_350') => (url || '').replace(/(card\.yuyu-tei\.jp\/opc\/)(?:\d+_\d+|front)(\/)/, `$1${size}$2`);
+const isCat = (url) => /card\.yuyu-tei\.jp\/opc\//.test(url || '');
+// Show a small image straight away, then swap in the sharp one when it has loaded.
+export function sharpen(img, hiUrl) {
+  if (!img || !hiUrl) return;
+  const big = new Image();
+  big.onload = () => { if (img.isConnected) img.src = hiUrl; };
+  big.src = hiUrl;
+}
+export const cardImg = (c, cls = '') => `<img class="${cls}" loading="lazy" decoding="async" src="${esc(catImg(c, cls === 'xs' ? '100_140' : cls === 'sm' ? '200_280' : '250_350'))}" ${cls === '' ? `data-hd="${esc(catImg(c, 'front'))}"` : ''} alt="${esc(c.code)}" onerror="this.style.visibility='hidden'">`;
+
+// ----- sharper images on screen: swap tiles to the 500x700 image once they scroll into view -----
+export const hdOn = () => localStorage.getItem('hd_images') !== '0';
+let hdObs = null;
+export function initHd() {
+  if (hdObs || !('IntersectionObserver' in window)) return;
+  hdObs = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      const img = e.target; hdObs.unobserve(img);
+      if (hdOn() && img.dataset.hd) sharpen(img, img.dataset.hd);
+    }
+  }, { rootMargin: '120px' });
+  const scan = (root) => root.querySelectorAll?.('img[data-hd]').forEach((i) => { if (!i.dataset.hdSeen) { i.dataset.hdSeen = '1'; hdObs.observe(i); } });
+  new MutationObserver((muts) => { for (const m of muts) for (const n of m.addedNodes) { if (n.nodeType === 1) { if (n.matches?.('img[data-hd]')) { n.dataset.hdSeen = '1'; hdObs.observe(n); } else scan(n); } } })
+    .observe(document.getElementById('app'), { childList: true, subtree: true });
+}
 export const refBnd = (c) => (c && c.jpy ? c.jpy * state.fx : 0);
 export const setName = (id) => state.cat?.setNames[id] || id.toUpperCase();
 export const colorDot = (col) => {
@@ -156,13 +185,13 @@ export function invStats() {
 
 // ---------- listings ----------
 export const listingPrice = (l) => (l.type === 'auction' ? Number(l.current_bid ?? l.start_price) : Number(l.price));
-export const listingImg = (l) => l.photos?.[0] || l.catalog_image || '';
+export const listingImg = (l) => l.photos?.[0] || upImg(l.catalog_image, '250_350') || '';
 export function tile(l) {
   const ref = state.cat?.byRef.get(l.card_ref);
   const r = ref ? refBnd(ref) : 0, p = listingPrice(l);
   const deal = l.type === 'buy_now' && r > 0 && p <= r * 0.9 ? `<span class="badge warn">Below market</span>` : '';
   return `<a class="tile" href="#/listing/${l.id}">
-    <img loading="lazy" src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'">
+    <img loading="lazy" decoding="async" src="${esc(listingImg(l))}" ${!l.photos?.length ? `data-hd="${esc(upImg(l.catalog_image, 'front'))}"` : ''} alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
     <div class="b"><div class="code">${esc(l.card_code)} · ${esc(l.rarity || '')} · ${esc(l.condition)}</div>
     <div class="nm">${esc(ref?.name || l.card_name)}</div>
     <div class="row tight between"><span class="price">${bnd(p)}</span><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span></div>
@@ -185,7 +214,6 @@ export async function cardPicker(onPick, { title = 'Find a card' } = {}) {
 }
 
 export function enlarge(c) {
-  const s = sheet(`<img class="big" src="${esc(catImg(c, '200_280'))}" alt=""><p><b>${esc(c.code)}</b> ${esc(c.rarity)}<br>${esc(c.name)}</p><p class="muted">${esc(setName(c.set))}</p>`);
-  const big = new Image(); big.onload = () => { const im = s.el.querySelector('img.big'); if (im) im.src = big.src; };
-  big.src = `https://card.yuyu-tei.jp/opc/front/${c.set}/${c.num}.jpg`;
+  const s = sheet(`<img class="big" src="${esc(catImg(c, '250_350'))}" alt=""><p><b>${esc(c.code)}</b> ${esc(c.rarity)}<br>${esc(c.name)}</p><p class="muted">${esc(setName(c.set))}</p>`);
+  sharpen(s.el.querySelector('img.big'), catImg(c, 'front'));
 }

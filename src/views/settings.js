@@ -15,6 +15,7 @@ export async function viewSettings($app) {
     <div class="panel"><h2>Membership</h2><p>${isMember() ? `⭐ Member until <b>${new Date(me.member_until).toLocaleDateString()}</b>` : `Free plan. Upgrade for auction selling (BND ${esc(PRICE)}/month).`}</p><a class="btn ${isMember() ? 'sec' : ''}" href="#/membership">${isMember() ? 'Manage membership' : 'Upgrade'}</a></div>` : needLogin('manage your profile')}
     <div class="panel"><h2>Prices</h2><p>Reference prices are Yuyutei (Japan shop) selling prices in JPY, converted to BND using the SGD rate because BND is pegged to SGD.</p>
       <p>Rate: <b>${state.fx.toFixed(5)}</b> BND per JPY <span class="muted">(${esc(state.fxSrc)})</span><br>Prices updated: <b>${esc(cat.updated)}</b></p>
+      <label class="inline"><input type="checkbox" id="hd" ${localStorage.getItem('hd_images') !== '0' ? 'checked' : ''} style="width:auto"> Sharp card images (uses more mobile data)</label>
       <label>Manual rate override (BND per JPY, empty = automatic)</label><div class="row tight"><input id="fx" inputmode="decimal" value="${esc(localStorage.getItem('fx_manual') || '')}" style="max-width:160px"><button class="btn sec" id="fx-s">Apply</button></div></div>
     ${signed ? `<div class="panel"><h2>Data</h2><button class="btn sec" id="exp">Export inventory (CSV)</button></div>` : ''}
     <div class="panel"><h2>App</h2>${installEvt ? `<button class="btn" id="inst">Install app</button>` : `<p class="muted">Install: open the browser menu and choose "Add to Home screen" (iPhone: Share, then Add to Home Screen).</p>`}
@@ -36,6 +37,7 @@ export async function viewSettings($app) {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'inventory.csv'; a.click();
     });
   }
+  $('#hd').onchange = (e) => { localStorage.setItem('hd_images', e.target.checked ? '1' : '0'); toast(e.target.checked ? 'Sharp images on' : 'Data saver on'); };
   $('#fx-s').onclick = guard(async () => {
     const v = $('#fx').value.trim();
     if (v && !(parseFloat(v) > 0)) throw new Error('Enter a positive number, e.g. 0.0085');

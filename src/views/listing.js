@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
   const cat = await loadCatalog();
@@ -12,6 +12,7 @@ export async function viewListing($app, id, setUnsub) {
     const c = cat.byRef.get(l.card_ref), ref = c ? refBnd(c) : 0;
     const uid = state.user?.id, isSeller = uid === l.seller_id, isBuyer = uid === l.buyer_id;
     const photos = l.photos?.length ? l.photos : [l.catalog_image].filter(Boolean);
+    const small = (u) => upImg(u, '250_350'), sharp = (u) => upImg(u, 'front'), thumb = (u) => upImg(u, '100_140');
     const live = l.status === 'active' && (l.type === 'buy_now' || new Date(l.ends_at) > new Date());
     const minBid = l.current_bid == null ? Number(l.start_price) : Number(l.current_bid) + Number(l.bid_increment);
     const shown = l.type === 'auction' ? Number(l.current_bid ?? l.start_price) : Number(l.price);
@@ -40,8 +41,8 @@ export async function viewListing($app, id, setUnsub) {
 
     const diff = ref > 0 ? Math.round(((shown - ref) / ref) * 100) : null;
     $app.innerHTML = `<p><a href="javascript:history.back()">← Back</a></p><div class="detail"><div>
-      <img class="main" id="mainimg" src="${esc(photos[0] || '')}" alt="" onerror="this.style.visibility='hidden'">
-      <div class="thumbs">${photos.map((p) => `<img src="${esc(p)}" data-src="${esc(p)}">`).join('')}</div>
+      <img class="main" id="mainimg" src="${esc(small(photos[0] || ''))}" alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
+      <div class="thumbs">${photos.length > 1 || l.photos?.length ? photos.map((p) => `<img src="${esc(thumb(p))}" data-src="${esc(p)}" alt="">`).join('') : ''}</div>
       ${l.photos?.length ? '' : '<p class="muted">Catalogue image only. Ask the seller for photos of the actual card.</p>'}</div>
       <div><h1>${esc(c?.name || l.card_name)}</h1>
       <p class="muted"><a href="#/card/${esc(l.card_code)}">${esc(l.card_code)}</a> · ${esc(l.rarity || '')} · ${esc((l.set_id || '').toUpperCase())} · Condition ${esc(l.condition)} · ${esc(l.language)}</p>
@@ -56,7 +57,10 @@ export async function viewListing($app, id, setUnsub) {
       ${bids?.length ? `<h2 style="margin-top:1rem">Bid history</h2><table>${bids.map((b) => `<tr><td>${bnd(b.amount)}</td><td>${esc(b.bidder?.display_name)}</td><td class="muted">${new Date(b.created_at).toLocaleString()}</td></tr>`).join('')}</table>` : ''}
       </div></div>`;
 
-    $app.querySelectorAll('.thumbs img').forEach((i) => (i.onclick = () => ($app.querySelector('#mainimg').src = i.dataset.src)));
+    const mainImg = $app.querySelector('#mainimg');
+    sharpen(mainImg, sharp(photos[0] || ''));
+    $app.querySelectorAll('.thumbs img').forEach((i) => (i.onclick = () => { mainImg.src = small(i.dataset.src); sharpen(mainImg, sharp(i.dataset.src)); }));
+    mainImg.style.cursor = 'zoom-in'; mainImg.onclick = () => window.open(sharp(photos[0] || ''), '_blank', 'noopener');
     const on = (sel, fn) => { const el = $app.querySelector('#' + sel); if (el) el.onclick = guard(fn); };
     on('login', signIn);
     on('buy', async () => { if (!(await confirmSheet('Reserve this card?', 'You will arrange payment and meet-up with the seller on WhatsApp.', 'Reserve'))) return; await rpc('buy_now', { p_listing: id }); toast('Reserved. Contact the seller.'); draw(); });

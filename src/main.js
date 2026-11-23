@@ -1,5 +1,5 @@
 import './style.css';
-import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, signOut, isMember, fmtLeft } from './lib.js';
+import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, signOut, isMember, fmtLeft, initHd } from './lib.js';
 import { viewHome } from './views/home.js';
 import { viewInventory } from './views/inventory.js';
 import { viewExplore, viewMarket, viewSet, viewCard } from './views/explore.js';
@@ -100,6 +100,7 @@ async function route() {
 window.addEventListener('hashchange', route);
 
 async function boot() {
+  initHd();
   if ('serviceWorker' in navigator && import.meta.env.PROD) navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js');
   if (!configured) return route();
   const { data } = await sb.auth.getSession();

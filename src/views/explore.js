@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, setName, tile, listingPrice, enlarge, colorDot, rpc } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc } from '../lib.js';
 import { setCircle } from './home.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
@@ -91,7 +91,7 @@ export async function viewCard($app, code) {
   const { data: ls } = await sb.from('listings').select('*').eq('status', 'active').eq('card_code', code).order('created_at', { ascending: false });
   const inv = state.inv || new Map();
   $app.innerHTML = `<p><a href="#/set/${main.set}">← ${esc(setName(main.set))}</a></p>
-    <div class="detail"><div><img class="main" id="mainimg" src="${esc(catImg(main))}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="detail"><div><img class="main" id="mainimg" src="${esc(catImg(main))}" alt="${esc(main.code)}" onerror="this.style.visibility='hidden'">
       ${variants.length > 1 ? `<div class="thumbs">${variants.map((v) => `<img data-ref="${esc(v.ref)}" src="${esc(catImg(v, '100_140'))}" title="${esc(v.rarity)}" class="${v.ref === main.ref ? 'on' : ''}">`).join('')}</div>` : ''}</div>
     <div><h1>${esc(main.name)}</h1><p class="muted">${esc(code)} · ${colorDot(main.color)} ${esc(main.color || '')} ${esc(main.type || '')}</p>
       ${main.jp ? `<p class="muted">${esc(main.jp)}</p>` : ''}
@@ -102,7 +102,7 @@ export async function viewCard($app, code) {
   let cur = main;
   const show = (v) => {
     cur = v;
-    $app.querySelector('#mainimg').src = catImg(v);
+    const mi = $app.querySelector('#mainimg'); mi.src = catImg(v); sharpen(mi, catImg(v, 'front'));
     $app.querySelectorAll('.thumbs img').forEach((i) => i.classList.toggle('on', i.dataset.ref === v.ref));
     $app.querySelector('#vinfo').innerHTML = `<b>${esc(v.rarity)}</b> ${v.parallel ? '· alternate art' : ''}<br><span class="price">${v.jpy ? bnd(refBnd(v)) : 'No price'}</span> <span class="muted">reference${v.jpy ? ` (¥${v.jpy.toLocaleString()} Yuyutei)` : ''}</span>${state.user ? `<br>You own: <b>${inv.get(v.ref) || 0}</b>` : ''}`;
     $app.querySelector('#vact').innerHTML = `${state.user ? `<button class="btn sec" id="addinv">+ Add to inventory</button>` : ''}<a class="btn" href="#/sell/${esc(v.ref)}">Sell this card</a><button class="btn sec" id="zoom">Enlarge</button>`;

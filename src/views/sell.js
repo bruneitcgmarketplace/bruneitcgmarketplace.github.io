@@ -1,11 +1,16 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadMe, loadCatalog, loadInv, refBnd, catImg, cardImg, cardPicker, isMember, needLogin, bindLogin, setName, PRICE } from '../lib.js';
 
-async function resizeToJpeg(file, max = 1000) {
-  const bmp = await createImageBitmap(file);
+// Photos: up to 1600 px on the long side, JPEG quality 0.9, stepping down only if the file would exceed the 3 MB bucket limit.
+async function resizeToJpeg(file, max = 1600) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
-  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
-  return new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.82));
+  const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, cv.width, cv.height);
+  for (const q of [0.9, 0.85, 0.8, 0.7]) {
+    const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', q));
+    if (blob.size <= 2.8 * 1024 * 1024) return blob;
+  }
+  return new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.6));
 }
 
 export async function viewSell($app, preRef) {
