@@ -13,6 +13,8 @@ grant execute on function auth.uid() to anon, authenticated;
 `;
 await db.exec(stub);
 await db.exec(readFileSync(new URL('../01_schema.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../03_inventory.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../04_admin.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -132,6 +134,38 @@ ok('admin reads reports', (await as(boss, `select * from reports`)).rows.length 
 await as(boss, `select admin_cancel_listing($1, 1)`, [bn2]);
 ok('admin cancel listing + resolve', (await admin(`select (select status from listings where id=$1) s, (select resolved from reports where id=1) r`, [bn2])).rows[0].s === 'cancelled');
 ok('cannot forge report as someone else', await fails(buyer, `insert into reports(listing_id, reporter_id, reason) values ($1, $2, 'x y z')`, [bn2, seller]));
+
+// --- inventory
+const ref = 'op01-1';
+ok('inventory add', (await as(buyer, `select inventory_adjust($1, 3) q`, [ref])).rows[0].q === 3);
+ok('inventory subtract', (await as(buyer, `select inventory_adjust($1, -1) q`, [ref])).rows[0].q === 2);
+ok('inventory is private', (await as(seller, `select * from inventory`)).rows.length === 0);
+ok('cannot write other users inventory directly', await fails(seller, `insert into inventory(user_id, card_ref, qty) values ($1, 'x', 1)`, [buyer]));
+ok('inventory to zero deletes row', (await as(buyer, `select inventory_adjust($1, -5) q`, [ref])).rows[0].q === 0 && (await as(buyer, `select * from inventory`)).rows.length === 0);
+await as(seller, `select inventory_adjust($1, 2)`, [ref]);
+const bn3 = await lst(seller, { type: 'buy_now', price: 7, card_ref: ref });
+await as(buyer, `select buy_now($1)`, [bn3]);
+await as(seller, `select mark_sold($1)`, [bn3]);
+ok('mark_sold deducts one copy', (await as(seller, `select qty from inventory where card_ref=$1`, [ref])).rows[0].qty === 1);
+const bn4 = await lst(seller, { type: 'buy_now', price: 7, card_ref: ref });
+await as(buyer, `select buy_now($1)`, [bn4]);
+await as(seller, `select mark_sold($1)`, [bn4]);
+ok('mark_sold removes row at last copy', (await as(seller, `select * from inventory`)).rows.length === 0);
+const bn5 = await lst(seller, { type: 'buy_now', price: 7, card_ref: ref });
+await as(buyer, `select buy_now($1)`, [bn5]);
+ok('mark_sold works with no inventory row', !(await fails(seller, `select mark_sold($1)`, [bn5])));
+
+// --- admin tools
+ok('non-admin cannot grant membership', await fails(buyer, `select admin_grant_membership($1, 30)`, [buyer], 'Admin only'));
+ok('non-admin cannot set strikes', await fails(buyer, `select admin_set_strikes($1, 0)`, [buyer], 'Admin only'));
+ok('regular user still cannot read others private profile', (await as(buyer, `select * from private_profiles where id = $1`, [seller])).rows.length === 0);
+await as(boss, `select admin_grant_membership($1, 30)`, [buyer2]);
+ok('admin grants membership', (await as(boss, `select is_member($1) m`, [buyer2])).rows[0].m);
+ok('admin reads all private profiles', (await as(boss, `select * from private_profiles`)).rows.length === 4);
+await as(boss, `select admin_set_strikes($1, 0)`, [buyer2]);
+ok('admin resets strikes', (await as(buyer2, `select strikes from private_profiles where id = $1`, [buyer2])).rows[0].strikes === 0);
+await as(boss, `select admin_grant_membership($1, 0)`, [buyer2]);
+ok('admin revokes membership (days <= 0)', !(await as(boss, `select is_member($1) m`, [buyer2])).rows[0].m);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
