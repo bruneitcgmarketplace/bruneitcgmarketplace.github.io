@@ -11,7 +11,7 @@ Live: https://bruneitcgmarketplace.github.io/ · Stack: Vite + vanilla JS (stati
 | Home | Collection value, listings and auctions ending soon, value by set, set completion rings, browse by set |
 | Inventory | Your cards with quantity steppers, list/grid view, search, set filter, value in BND, "Sell" button, CSV export (Settings) |
 | Explore | "For sale" feed (search, type, sort) and "Card sets" browser: set page, card page with all arts, price and current listings |
-| Scan | Camera reads the card code (OCR via Tesseract.js, loaded on demand) or type a code; staged list, choose art, add to inventory |
+| Scan | Live camera recognition of the card art (no OCR, about 10 cards per second). Hold a card in the frame, it is added, take it out, show the next. Staged list, choose the art, add to inventory. Or type a code. |
 | Orders | Buying (bids, purchases), Selling (needs settlement, active), Sold history with totals; WhatsApp contact, mark sold, release, strike |
 | Settings | Display name, WhatsApp, membership, exchange rate override, CSV export, install hint, admin link |
 
@@ -33,6 +33,12 @@ Push to `main`; `.github/workflows/deploy.yml` builds and publishes to GitHub Pa
 
 `node tools/refresh_catalog.mjs` re-scrapes Yuyutei (all sets and prices, about 2 minutes) and optcgapi.com (English names, colours) into `public/catalog.json`. Run it when a new set releases or prices drift, then commit.
 
+## How Scan works (and how to rebuild it)
+
+The camera frame inside the guide box is reduced to a small fingerprint (16x22 high-passed grey grid, 6x8 colour grid, edge strengths; 811 numbers) and compared with the fingerprint of every catalogue card in `public/features-1.bin` and `features-2.bin` (3.5 MB in total, loaded once, then cached). The high-pass step removes glare and uneven light. Nine slightly shifted/scaled crops are tried on the 60 best candidates. A card is added after at least 3 consistent confident frames over 0.45 s, and re-armed once the frame is empty for 0.55 s. Unsure frames show the top 3 guesses as buttons. In tests on camera-like simulated images (tilt, blur, glare, dim light) it picks the right card about 97% of the time at first look, and the auto-add rule produced no wrong adds.
+
+After refreshing the catalogue (new sets), rebuild the fingerprints: `python tools/scantest/dl.py` (downloads card images, about 2 minutes, needs Python with pillow and numpy), then `python tools/build_features.py`. The JavaScript in `src/scanner.js` and `feat_v` in `tools/build_features.py` must stay identical.
+
 ## Rules enforced in the database (not the browser)
 
 - Only members can create auctions. Bids: start price or last bid + increment, no self-bidding, 2-minute anti-sniping extension, binding wins.
@@ -46,7 +52,7 @@ Push to `main`; `.github/workflows/deploy.yml` builds and publishes to GitHub Pa
 
 ## Known gaps
 
-- Camera scan is NOT tested on a real phone (typed codes and the code-recognition logic are tested).
+- Camera scan is tested with simulated video (synthetic camera stream with tilt, blur, glare, dim light), NOT on a real phone camera yet. Expect to tune the guide frame and thresholds after a first real try.
 - No seller ratings, push notifications, receipt upload or online payments. Bank details are not published yet.
 - Catalogue images hotlink Yuyutei; sellers should upload real photos. Check image licensing before a wider launch.
 - Some newest promo cards and a few new cards have no English name yet.

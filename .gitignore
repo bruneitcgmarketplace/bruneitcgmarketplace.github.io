@@ -2,3 +2,8 @@ node_modules
 dist
 .env
 .env.secrets
+tools/scantest/cat/
+tools/scantest/img/
+tools/scantest/*.npy
+tools/scantest/__pycache__/
+tools/__pycache__/

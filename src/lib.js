@@ -86,7 +86,7 @@ export async function loadCatalog() {
   }
   const sets = [...bySet.keys()].sort((a, b) => setKey(a) - setKey(b)).map((id) => ({
     id, name: raw.sets[id] || id.toUpperCase(), count: new Set(bySet.get(id).map((c) => c.code)).size, cards: bySet.get(id) }));
-  state.cat = { updated: raw.updated, cards, byRef, byCode, bySet, sets, setNames: raw.sets };
+  state.cat = { updated: raw.updated, cards, byRef, byCode, bySet, sets, setNames: raw.sets, rawRefs: raw.cards.map((r) => r[1] + '-' + r[0]) };
   return state.cat;
 }
 export const catImg = (c, size = '200_280') => `https://card.yuyu-tei.jp/opc/${size}/${c.set}/${c.num}.jpg`;
