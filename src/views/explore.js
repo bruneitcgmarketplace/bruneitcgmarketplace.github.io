@@ -2,21 +2,21 @@ import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, ref
 import { setCircle } from './home.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
-const seg = (mode) => `<div class="seg"><a class="${mode === 'sale' ? 'on' : ''}" href="#/explore">For sale</a><a class="${mode === 'sets' ? 'on' : ''}" href="#/explore?mode=sets">Card sets</a></div>`;
 
 export async function viewExplore($app) {
   const cat = await loadCatalog();
-  const p = qs(), mode = p.get('mode') === 'sets' ? 'sets' : 'sale';
-  if (mode === 'sets') {
-    if (state.user) await loadInv();
-    const owned = new Map();
-    for (const [ref] of state.inv || []) { const c = cat.byRef.get(ref); if (c) (owned.get(c.set) || owned.set(c.set, new Set()).get(c.set)).add(c.code); }
-    $app.innerHTML = `<h1>Explore</h1>${seg('sets')}<div class="setgrid">${cat.sets.map((s) => setCircle(s, state.user ? ((owned.get(s.id)?.size || 0) / s.count) * 100 : null)).join('')}</div>`;
-    return;
-  }
+  if (state.user) await loadInv();
+  const owned = new Map();
+  for (const [ref] of state.inv || []) { const c = cat.byRef.get(ref); if (c) (owned.get(c.set) || owned.set(c.set, new Set()).get(c.set)).add(c.code); }
+  $app.innerHTML = `<h1>Card sets</h1><p class="muted">Browse every One Piece set. ${state.user ? 'Rings show how much of each set you own.' : 'Sign in to see how much of each set you own.'}</p><div class="setgrid">${cat.sets.map((s) => setCircle(s, state.user ? ((owned.get(s.id)?.size || 0) / s.count) * 100 : null)).join('')}</div>`;
+}
+
+export async function viewMarket($app) {
+  const cat = await loadCatalog();
+  const p = qs();
   const f = JSON.parse(sessionStorage.getItem('filters') || '{}');
   const type = p.get('type') ?? f.type ?? '';
-  $app.innerHTML = `<h1>Explore</h1>${seg('sale')}
+  $app.innerHTML = `<h1>Marketplace</h1><p class="muted">Cards for sale by collectors in Brunei. Buy now or bid in auctions.</p>
     <div class="panel"><div class="row">
       <input id="q" placeholder="Search card code or name, e.g. OP01-001" value="${esc(f.q || '')}">
       <select id="type"><option value="">All types</option><option value="buy_now">Buy now</option><option value="auction">Auctions</option></select>
@@ -65,7 +65,7 @@ export async function viewSet($app, id) {
     let cards = set.cards.filter((c) => (f.alt || c.def) && (!f.rar || c.rarity === f.rar)
       && (f.own === 'all' || (f.own === 'owned') === inv.has(c.ref)) && (!f.q || (c.code + ' ' + c.name + ' ' + c.jp).toLowerCase().includes(f.q.toLowerCase())));
     const ownedCodes = new Set([...inv.keys()].map((r) => cat.byRef.get(r)).filter((c) => c?.set === id).map((c) => c.code)).size;
-    $app.innerHTML = `<p><a href="#/explore?mode=sets">← All sets</a></p><h1>${esc(set.name)}</h1><p class="muted">${id.toUpperCase()} · ${set.count} cards${state.user ? ` · you own ${ownedCodes} (${Math.round((ownedCodes / set.count) * 100)}%)` : ''}</p>
+    $app.innerHTML = `<p><a href="#/explore">← All sets</a></p><h1>${esc(set.name)}</h1><p class="muted">${id.toUpperCase()} · ${set.count} cards${state.user ? ` · you own ${ownedCodes} (${Math.round((ownedCodes / set.count) * 100)}%)` : ''}</p>
       <div class="panel"><div class="row"><input id="q" placeholder="Search in set" value="${esc(f.q)}">
         <select id="rar"><option value="">All rarities</option>${rarities.map((r) => `<option ${f.rar === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
         ${state.user ? `<select id="own"><option value="all">All cards</option><option value="owned" ${f.own === 'owned' ? 'selected' : ''}>Owned</option><option value="missing" ${f.own === 'missing' ? 'selected' : ''}>Missing</option></select>` : ''}</div>

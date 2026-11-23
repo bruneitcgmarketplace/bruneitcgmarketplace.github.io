@@ -1,8 +1,8 @@
 import './style.css';
-import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, isMember, fmtLeft } from './lib.js';
+import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, signOut, isMember, fmtLeft } from './lib.js';
 import { viewHome } from './views/home.js';
 import { viewInventory } from './views/inventory.js';
-import { viewExplore, viewSet, viewCard } from './views/explore.js';
+import { viewExplore, viewMarket, viewSet, viewCard } from './views/explore.js';
 import { viewScan, stopScan } from './views/scan.js';
 import { viewOrders } from './views/orders.js';
 import { viewSettings } from './views/settings.js';
@@ -11,7 +11,7 @@ import { viewSell } from './views/sell.js';
 import { viewMembership, viewAdmin } from './views/admin.js';
 
 const $app = document.getElementById('app');
-const $nav = document.getElementById('nav');
+const $drawer = document.getElementById('drawer');
 const $top = document.getElementById('top');
 
 // countdown timers (any element with data-end)
@@ -24,14 +24,43 @@ setInterval(() => {
   });
 }, 1000);
 
-const TABS = [['home', '🏠', 'Home'], ['inventory', '📦', 'Inventory'], ['explore', '🧭', 'Explore'], ['scan', '📷', 'Scan'], ['orders', '🧾', 'Orders'], ['settings', '⚙️', 'Settings']];
-const tabOf = (page) => ({ set: 'explore', card: 'explore', listing: 'explore', sell: 'inventory', membership: 'settings', admin: 'settings' }[page] || page || 'home');
+// Menu (top-left hamburger). Each item: [key, icon, label, href, needsLogin?]
+const MENU = [
+  ['home', '🏠', 'Home', '#/'],
+  ['market', '🛒', 'Marketplace', '#/market'],
+  ['explore', '🧭', 'Card sets', '#/explore'],
+  ['sell', '➕', 'Sell a card', '#/sell'],
+  ['mylistings', '🏷️', 'My listings', '#/mylistings', true],
+  ['inventory', '📦', 'Inventory', '#/inventory'],
+  ['scan', '📷', 'Scan cards', '#/scan'],
+  ['orders', '🧾', 'Orders', '#/orders', true],
+  ['membership', '⭐', 'Membership', '#/membership', true],
+  ['settings', '⚙️', 'Settings', '#/settings'],
+];
+const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore' }[page] || page || 'home');
+const closeMenu = () => { document.body.classList.remove('menu-open'); $drawer.setAttribute('aria-hidden', 'true'); };
+const openMenu = () => { document.body.classList.add('menu-open'); $drawer.setAttribute('aria-hidden', 'false'); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+document.getElementById('scrim').onclick = closeMenu;
 
 function renderChrome(page) {
-  const cur = tabOf(page);
-  $nav.innerHTML = TABS.map(([k, ic, lb]) => `<a class="${cur === k ? 'on' : ''}" href="#/${k === 'home' ? '' : k}"><span class="ic">${ic}</span><span>${lb}</span></a>`).join('');
-  $top.innerHTML = `<a class="brand" href="#/">🏴‍☠️ Brunei TCG</a><span class="grow"></span>
-    ${state.user ? `<a class="btn sec sm-btn" href="#/sell">+ Sell</a>${isMember() ? '<span class="badge warn">⭐ Member</span>' : ''}` : `<button class="btn sm-btn" id="top-login">Sign in</button>`}`;
+  const cur = menuKey(page), signed = !!state.user;
+  const items = MENU.filter((m) => signed || !m[4]);
+  if (state.me?.is_admin) items.push(['admin', '🛡️', 'Admin', '#/admin']);
+  const name = state.user?.user_metadata?.full_name || state.user?.email || '';
+  $drawer.innerHTML = `<div class="dr-head"><span class="brand">🏴‍☠️ Brunei TCG</span><button class="dr-x" id="dr-x" aria-label="Close menu">✕</button></div>
+    ${signed ? `<div class="dr-user"><b>${esc(name)}</b><span class="muted">${isMember() ? '⭐ Member' : 'Free plan'}</span></div>` : ''}
+    <nav class="dr-list">${items.map(([k, ic, lb, href]) => `<a class="${cur === k ? 'on' : ''}" href="${href}"><span class="ic">${ic}</span>${lb}</a>`).join('')}</nav>
+    <div class="dr-foot">${signed ? `<button class="btn sec" id="dr-out">Sign out</button>` : `<button class="btn" id="dr-in">Sign in with Google</button>`}</div>`;
+  $drawer.querySelectorAll('a').forEach((a) => (a.onclick = closeMenu));
+  $drawer.querySelector('#dr-x').onclick = closeMenu;
+  const o = $drawer.querySelector('#dr-out'); if (o) o.onclick = () => { closeMenu(); signOut(); };
+  const i = $drawer.querySelector('#dr-in'); if (i) i.onclick = () => { closeMenu(); signIn(); };
+  const titles = { home: 'Brunei TCG', market: 'Marketplace', explore: 'Card sets', sell: 'Sell a card', mylistings: 'My listings', inventory: 'Inventory', scan: 'Scan', orders: 'Orders', membership: 'Membership', settings: 'Settings', admin: 'Admin' };
+  $top.innerHTML = `<button class="menu-btn" id="menu-btn" aria-label="Open menu">☰</button>
+    <a class="brand" href="#/">${cur === 'home' ? '🏴‍☠️ Brunei TCG' : esc(titles[cur] || 'Brunei TCG')}</a><span class="grow"></span>
+    ${signed ? `<a class="btn sec sm-btn" href="#/sell">+ Sell</a>${isMember() ? '<span class="badge warn">⭐ Member</span>' : ''}` : `<button class="btn sm-btn" id="top-login">Sign in</button>`}`;
+  document.getElementById('menu-btn').onclick = openMenu;
   const b = document.getElementById('top-login'); if (b) b.onclick = signIn;
 }
 
@@ -42,6 +71,7 @@ async function route() {
   stopScan();
   const [path] = location.hash.slice(2).split('?');
   const [page, arg] = path.split('/');
+  closeMenu();
   renderChrome(page);
   window.scrollTo(0, 0);
   if (!configured) { $app.innerHTML = `<div class="panel"><h1>Setup needed</h1><p>Add the Supabase keys (see README), then rebuild.</p></div>`; return; }
@@ -52,6 +82,8 @@ async function route() {
     switch (page) {
       case 'inventory': await viewInventory(target); break;
       case 'explore': await viewExplore(target); break;
+      case 'market': await viewMarket(target); break;
+      case 'mylistings': await viewOrders(target, { only: 'selling' }); break;
       case 'set': await viewSet(target, arg); break;
       case 'card': await viewCard(target, decodeURIComponent(arg || '')); break;
       case 'scan': await viewScan(target); break;
