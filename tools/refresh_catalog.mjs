@@ -21,9 +21,9 @@ async function fetchSet(set) {
   }
 }
 
-const cards = []; const failed = [];
+const cards = []; const failed = []; let streak = 0;
 for (const s of SETS) {
-  try { const rows = await fetchSet(s); if (rows.length) console.log(s, rows.length); cards.push(...rows); } catch (e) { failed.push(s); console.log('FAILED', e.message); }
+  try { const rows = await fetchSet(s); if (rows.length) console.log(s, rows.length); cards.push(...rows); streak = 0; } catch (e) { failed.push(s); console.log('FAILED', e.message); if (++streak >= 3) { console.error('Source is blocking this machine (3 failures in a row); stopping early, catalogue not written.'); process.exit(1); } }
   await sleep(1200);
 }
 if (failed.length) { console.error('Failed sets, not writing:', failed.join(',')); process.exit(1); }
