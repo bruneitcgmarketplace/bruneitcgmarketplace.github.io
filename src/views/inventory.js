@@ -10,20 +10,20 @@ export async function viewInventory($app) {
   const { data: mine } = await sb.from('listings').select('card_ref').eq('seller_id', state.user.id).in('status', ['active', 'reserved']);
   for (const l of mine || []) listed.set(l.card_ref, (listed.get(l.card_ref) || 0) + 1);
 
-  const f = JSON.parse(sessionStorage.getItem('invf') || '{"q":"","set":"","sort":"value"}');
+  const f = JSON.parse(sessionStorage.getItem('invf') || '{"q":"","set":"","sort":"new"}');
   const view = localStorage.getItem('view_inv') || 'list';
 
   const draw = () => {
     const st = invStats();
     let rows = st.rows.filter((r) => (!f.set || r.c.set === f.set) && (!f.q || (r.c.code + ' ' + r.c.name + ' ' + r.c.jp).toLowerCase().includes(f.q.toLowerCase())));
-    const sorters = { value: (a, b) => b.v - a.v, code: (a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref), qty: (a, b) => b.q - a.q, name: (a, b) => a.c.name.localeCompare(b.c.name) };
+    const sorters = { new: (a, b) => b.t - a.t || a.c.code.localeCompare(b.c.code), value: (a, b) => b.v - a.v, code: (a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref), qty: (a, b) => b.q - a.q, name: (a, b) => a.c.name.localeCompare(b.c.name) };
     rows.sort(sorters[f.sort] || sorters.value);
     const sets = [...new Set(st.rows.map((r) => r.c.set))];
     $app.innerHTML = `<div class="head"><h1>Inventory</h1><div class="row tight"><button class="btn sec" id="share">🔗 Share</button><button class="btn sec" id="vm">${view === 'list' ? '▦ Grid' : '☰ List'}</button><button class="btn" id="add">+ Add card</button><a class="btn sec" href="#/scan">📷 Scan</a></div></div>
       <div class="hero small"><div class="muted">Value</div><div class="big-num">${bnd(st.value)}</div><div class="muted">${st.count} cards · ${st.unique} unique</div></div>
       <div class="panel"><div class="row"><input id="q" placeholder="Search your cards" value="${esc(f.q)}">
         <select id="set"><option value="">All sets</option>${sets.map((s) => `<option value="${s}" ${f.set === s ? 'selected' : ''}>${esc(s.toUpperCase() + ' · ' + setName(s))}</option>`).join('')}</select>
-        <select id="sort">${[['value', 'Value'], ['code', 'Card code'], ['qty', 'Quantity'], ['name', 'Name']].map(([k, l]) => `<option value="${k}" ${f.sort === k ? 'selected' : ''}>Sort: ${l}</option>`).join('')}</select></div></div>
+        <select id="sort">${[['new', 'Newest added'], ['value', 'Value'], ['code', 'Card code'], ['qty', 'Quantity'], ['name', 'Name']].map(([k, l]) => `<option value="${k}" ${f.sort === k ? 'selected' : ''}>Sort: ${l}</option>`).join('')}</select></div></div>
       ${!st.unique ? `<div class="panel center"><p>Your inventory is empty.</p><p class="muted">Add cards by search or scan them with your camera.</p><div class="row tight" style="justify-content:center"><button class="btn" id="add2">+ Add card</button><a class="btn sec" href="#/scan">Scan</a></div></div>` : ''}
       ${view === 'grid' ? `<div class="grid">${rows.map((r) => gridCell(r, listed)).join('')}</div>` : `<div class="panel nopad">${rows.map((r) => listRow(r, listed)).join('')}</div>`}
       ${rows.length < st.unique ? `<p class="muted">Showing ${rows.length} of ${st.unique} unique cards.</p>` : ''}`;

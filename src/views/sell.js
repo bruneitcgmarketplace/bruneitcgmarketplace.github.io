@@ -17,9 +17,14 @@ export async function viewSell($app, preRef) {
   if (!state.user) { $app.innerHTML = `<h1>Sell a card</h1>${needLogin('list a card')}`; return bindLogin($app); }
   const cat = await loadCatalog(); await loadInv();
   let chosen = preRef ? cat.byRef.get(preRef) : null;
+  // copies of this card already on sale, so "sell all" only offers what is still free
+  let listedN = 0;
+  const loadListed = async () => { listedN = 0; if (!chosen) return; const { data } = await sb.from('listings').select('id').eq('seller_id', state.user.id).eq('card_ref', chosen.ref).in('status', ['active', 'reserved']); listedN = (data || []).length; };
+  await loadListed();
   const member = isMember();
   const draw = () => {
     const owned = chosen ? state.inv.get(chosen.ref) || 0 : 0, ref = chosen ? refBnd(chosen) : 0;
+    const avail = owned ? Math.min(Math.max(0, owned - listedN), 50) : 1;   // copies you can list in one go
     $app.innerHTML = `<h1>Sell a card</h1>
       <div class="panel"><label>1. Card</label>
         ${chosen ? `<div class="pick" style="cursor:default">${cardImg(chosen)}<div><b>${esc(chosen.code)}</b> ${esc(chosen.rarity)}<br><span class="muted">${esc(chosen.name)} · ${esc(setName(chosen.set))}</span>${owned ? `<br><span class="badge bn">You own ${owned}</span>` : ''}</div></div>` : '<p class="muted">No card selected.</p>'}
@@ -34,6 +39,9 @@ export async function viewSell($app, preRef) {
       <div class="row"><div><label>Condition</label><select id="cond"><option value="M">M · Mint</option><option value="NM" selected>NM · Near mint</option><option value="LP">LP · Lightly played</option><option value="MP">MP · Moderately played</option><option value="HP">HP · Heavily played</option></select></div>
         <div><label>Language</label><select id="lang"><option>JP</option><option>EN</option><option>Other</option></select></div></div>
       <div id="bn"><label>Price (BND)</label><input id="price" type="number" min="0.5" step="0.5"></div>
+      <div id="qt" ${avail > 1 ? '' : 'style="display:none"'}><label>Quantity to sell (you have ${owned}${listedN ? ', ' + listedN + ' already listed' : ''})</label>
+        <div class="row tight"><input id="qty" type="number" min="1" max="${avail}" value="1" style="max-width:7rem"><button class="btn sec" id="qall" type="button">Sell all (${avail})</button></div>
+        <p class="muted">Each copy is listed separately at the same price, so buyers can take them one at a time. Up to 50 at once.</p></div>
       <div id="au" style="display:none"><div class="row"><div><label>Starting bid (BND)</label><input id="sp" type="number" min="0.5" step="0.5"></div>
         <div><label>Bid increment (BND)</label><input id="inc" type="number" min="0.5" step="0.5" value="1"></div>
         <div><label>Duration</label><select id="dur"><option value="24">1 day</option><option value="72" selected>3 days</option><option value="120">5 days</option><option value="168">7 days</option></select></div></div></div>
@@ -41,13 +49,14 @@ export async function viewSell($app, preRef) {
       <label>Photos of the actual card (up to 4, strongly recommended)</label><input id="ph" type="file" accept="image/*" multiple>
       ${state.me?.whatsapp ? '' : `<label>Your WhatsApp number (country code, e.g. 6737123456). Shared only with the other party once a deal is reserved.</label><input id="wa" inputmode="tel">`}
       <p><button class="btn" id="submit">Publish listing</button></p></div>` : ''}`;
-    $app.querySelector('#pick').onclick = () => cardPicker((c) => { chosen = c; draw(); }, { title: 'Find the card to sell' });
+    $app.querySelector('#pick').onclick = () => cardPicker(async (c) => { chosen = c; await loadListed(); draw(); }, { title: 'Find the card to sell' });
     if (!chosen) return;
     const $ = (s) => $app.querySelector(s);
+    const qa = $('#qall'); if (qa) qa.onclick = () => { $('#qty').value = avail; };
     const ur = $('#use-ref'); if (ur) ur.onclick = (e) => { e.preventDefault(); const v = (Math.round(ref * 2) / 2 || 0.5).toFixed(2); $('#price').value = v; $('#sp').value = v; };
     document.querySelectorAll('input[name=t]').forEach((r) => (r.onchange = () => {
       const a = document.querySelector('input[name=t]:checked').value === 'auction';
-      $('#bn').style.display = a ? 'none' : ''; $('#au').style.display = a ? '' : 'none';
+      $('#bn').style.display = a ? 'none' : ''; $('#au').style.display = a ? '' : 'none'; $('#qt').style.display = a || avail <= 1 ? 'none' : '';
     }));
     $('#submit').onclick = guard(async () => {
       const btn = $('#submit'); btn.disabled = true;
@@ -65,8 +74,12 @@ export async function viewSell($app, preRef) {
           condition: $('#cond').value, language: $('#lang').value, description: $('#desc').value };
         if (type === 'buy_now') p.price = Number($('#price').value);
         else { p.start_price = Number($('#sp').value); p.bid_increment = Number($('#inc').value); p.duration_hours = Number($('#dur').value); }
-        const id = await rpc('create_listing', { p });
-        toast('Listing published'); location.hash = '#/listing/' + id;
+        const n = type === 'buy_now' && avail > 1 ? Math.max(1, Math.min(Math.floor(Number($('#qty').value) || 1), avail)) : 1;
+        let made = 0, first = null, err = null;
+        for (let i = 0; i < n; i++) { try { const id = await rpc('create_listing', { p }); first = first || id; made++; } catch (e) { err = e; break; } }
+        if (!made) throw err;
+        toast(made === 1 ? 'Listing published' : `${made} listings published${err ? ' (stopped: ' + (err.message || err) + ')' : ''}`);
+        location.hash = made === 1 ? '#/listing/' + first : '#/mylistings';
       } finally { btn.disabled = false; }
     });
   };

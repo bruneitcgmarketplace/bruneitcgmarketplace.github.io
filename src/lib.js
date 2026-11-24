@@ -187,15 +187,16 @@ export function bindLogin(root = document) { const b = root.querySelector('#logi
 export async function loadInv(force = false) {
   if (!state.user) return new Map();
   if (state.inv && !force) return state.inv;
-  const { data, error } = await sb.from('inventory').select('card_ref, qty').limit(5000);
+  const { data, error } = await sb.from('inventory').select('card_ref, qty, updated_at').limit(5000);
   if (error) throw error;
   state.inv = new Map((data || []).map((r) => [r.card_ref, r.qty]));
+  state.invAt = new Map((data || []).map((r) => [r.card_ref, Date.parse(r.updated_at) || 0]));   // when each card was last added or changed
   return state.inv;
 }
 export async function invAdjust(ref, delta) {
   const q = await rpc('inventory_adjust', { p_card_ref: ref, p_delta: delta });
   await loadInv();
-  if (q > 0) state.inv.set(ref, q); else state.inv.delete(ref);
+  if (q > 0) { state.inv.set(ref, q); (state.invAt ||= new Map()).set(ref, Date.now()); } else state.inv.delete(ref);
   return q;
 }
 export function invStats() {
@@ -206,7 +207,7 @@ export function invStats() {
     const v = refBnd(c) * q; value += v; count += q;
     bySet.set(c.set, (bySet.get(c.set) || 0) + v);
     (owned.get(c.set) || owned.set(c.set, new Set()).get(c.set)).add(c.code);
-    rows.push({ c, q, v });
+    rows.push({ c, q, v, t: state.invAt?.get(ref) || 0 });
   }
   return { value, count, unique: rows.length, bySet, owned, rows };
 }
