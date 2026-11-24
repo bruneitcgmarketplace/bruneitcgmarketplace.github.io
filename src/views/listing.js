@@ -5,7 +5,7 @@ export async function viewListing($app, id, setUnsub) {
   const cat = await loadCatalog();
   const draw = async () => {
     const { data: l, error } = await sb.from('listings')
-      .select('*, seller:profiles!listings_seller_id_fkey(display_name), bidder:profiles!listings_current_bidder_fkey(display_name)').eq('id', id).maybeSingle();
+      .select('*, seller:profiles!listings_seller_id_fkey(display_name), bidder:profiles!listings_current_bidder_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)').eq('id', id).maybeSingle();
     if (error || !l) { $app.innerHTML = `<div class="notice err">${esc(error?.message || 'Listing not found')}</div>`; return; }
     const { data: bids } = l.type === 'auction'
       ? await sb.from('bids').select('amount,created_at,bidder:profiles!bids_bidder_id_fkey(display_name)').eq('listing_id', id).order('amount', { ascending: false }).limit(20)
@@ -31,8 +31,17 @@ export async function viewListing($app, id, setUnsub) {
 
     if (l.status === 'reserved' && (isSeller || isBuyer)) {
       let ct = null; try { ct = (await rpc('get_contact', { p_listing: id }))?.[0]; } catch {}
+      // Prefilled WhatsApp message (buyer informs seller / seller asks buyer to pay) with the listing link; same wording as the Orders page.
+      const waBtn = (ct) => {
+        const link = `${location.origin}${location.pathname}#/listing/${l.id}`;
+        const item = `${l.card_code} ${cat.byRef.get(l.card_ref)?.name || l.card_name}${l.condition ? ' (' + l.condition + ')' : ''} for ${bnd(shown)}`;
+        const msg = isSeller
+          ? `Hi ${ct.display_name || ''}, this is ${l.seller?.display_name || 'the seller'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'You won the auction for' : 'Your order is confirmed:'} ${item}.\nPlease make the payment and send me the receipt here.\nOrder link: ${link}`
+          : `Hi ${ct.display_name || ''}, this is ${l.buyer?.display_name || 'a buyer'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'I won the auction for' : 'I would like to buy'} ${item}.\nPlease confirm and let me know how to pay.\nListing link: ${link}`;
+        return `<p><a class="btn ${isSeller ? 'ok' : ''}" target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}?text=${encodeURIComponent(msg)}">💬 ${isSeller ? 'Ask buyer to pay' : 'Inform seller'}</a></p>`;
+      };
       actions = `<div class="notice">${l.type === 'auction' ? 'Auction won' : 'Reserved'}. ${isSeller ? 'Contact the buyer to settle.' : 'Contact the seller to settle.'}</div>
-        ${ct ? `<p><b>${esc(ct.display_name)}</b> · <a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">WhatsApp +${esc(ct.whatsapp)}</a></p>` : ''}
+        ${ct ? `<p><b>${esc(ct.display_name)}</b> · <a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">WhatsApp +${esc(ct.whatsapp)}</a></p>${waBtn(ct)}` : ''}
         ${isSeller ? `<div class="row tight"><button class="btn ok" id="sold">Mark as sold</button><button class="btn sec" id="release">Release</button><button class="btn bad" id="noshow">Release + strike buyer</button></div>`
           : l.type === 'buy_now' ? `<button class="btn sec" id="unreserve">Cancel my reservation</button>` : ''}`;
     } else if (l.status === 'reserved') actions = `<div class="notice">Reserved by another buyer.</div>`;
