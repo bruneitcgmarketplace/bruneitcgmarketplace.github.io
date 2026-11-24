@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
 import { openShareSheet } from './shared.js';
 
 export async function viewInventory($app) {
@@ -34,7 +34,7 @@ export async function viewInventory($app) {
     const l = listed.get(c.ref) || 0;
     return `<div class="inv-row" data-ref="${esc(c.ref)}">
       <div class="img" data-act="zoom">${cardImg(c, 'sm')}</div>
-      <div class="grow"><div><b>${esc(c.code)}</b> ${esc(c.rarity)} ${c.parallel ? '<span class="badge">alt</span>' : ''} ${l ? `<span class="badge bn">${l} listed</span>` : ''}</div>
+      <div class="grow"><div><b>${esc(c.code)}</b> ${esc(c.rarity)} ${artShort(c) ? '<span class="badge">' + esc(artShort(c)) + '</span>' : ''} ${l ? `<span class="badge bn">${l} listed</span>` : ''}</div>
         <div class="muted nm">${esc(c.name)}</div><div class="muted">${c.jpy ? bnd(refBnd(c)) + ' ea · ' + bnd(v) : 'No price'}</div></div>
       <div class="stepper"><button data-act="dec">−</button><b>${q}</b><button data-act="inc">+</button></div>
       <button class="btn sec sm-btn" data-act="sell">Sell</button></div>`;
