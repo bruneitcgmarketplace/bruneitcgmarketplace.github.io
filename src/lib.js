@@ -62,6 +62,25 @@ export function promptSheet(title, label, { value = '', okLabel = 'OK', multilin
 }
 
 // ---------- catalog ----------
+// Art type from the Yuyutei card name and rarity. Yuyutei writes the Japanese 'Manga Rare' as (スーパーパラレル) = super parallel.
+export const ART = {
+  std: ['Standard art', 'Standard'], alt: ['Alternate art', 'Alt art'], manga: ['Manga (Super Parallel)', 'Manga'], redmanga: ['Red Manga (Red Super Parallel)', 'Red Manga'],
+  goldsilver: ['Gold / Silver SP', 'SP Gold/Silver'], special: ['Special / drawn art', 'Special art'], foil: ['Foil variant', 'Foil'],
+  sp: ['SP (Special)', 'SP'], tr: ['Treasure Rare', 'Treasure'], promo: ['Promo', 'Promo'],
+};
+export function artOf(jp, rarity) {
+  if (/レッドスーパーパラレル/.test(jp)) return 'redmanga';
+  if (/スーパーパラレル/.test(jp)) return 'manga';
+  if (/金パラレル|銀パラレル/.test(jp)) return 'goldsilver';
+  if (/特別パラレル|描き下ろしパラレル/.test(jp)) return 'special';
+  if (/ラメフォイル|海賊旗フォイル|箔押し/.test(jp)) return 'foil';
+  if (rarity === 'TR') return 'tr';
+  if (rarity === 'SP') return 'sp';
+  if (/^P-/.test(rarity) || /パラレル/.test(jp)) return 'alt';
+  if (rarity === 'P') return 'promo';
+  return 'std';
+}
+export const artShort = (c) => (c.art && c.art !== 'std' ? ART[c.art][1] : '');
 const setKey = (id) => { const m = id.match(/^([a-z]+)(\d+)$/); const grp = { op: 0, eb: 1, prb: 2, st: 3 }[m?.[1]] ?? 4; return grp * 1000 - (m ? +m[2] : 0) * (grp === 3 ? -1 : 1); };
 
 export async function loadCatalog(force = false) {
@@ -71,7 +90,7 @@ export async function loadCatalog(force = false) {
   for (const r of raw.cards) {
     const [num, set, code, jp, rarity, jpy, en, color, type] = r;
     const c = { ref: set + '-' + num, num, set, code, jp, en, name: en || jp, rarity, jpy, color, type,
-      parallel: /^(P-|SP)/.test(rarity) || /パラレル/.test(jp), home: code.toLowerCase().startsWith(set), def: false };
+      parallel: /^(P-|SP)/.test(rarity) || /パラレル/.test(jp), art: artOf(jp, rarity), home: code.toLowerCase().startsWith(set), def: false };
     cards.push(c); byRef.set(c.ref, c);
     (byCode.get(code) || byCode.set(code, []).get(code)).push(c);
     (bySet.get(set) || bySet.set(set, []).get(set)).push(c);
@@ -207,7 +226,7 @@ export async function cardPicker(onPick, { title = 'Find a card' } = {}) {
     const t = q.value.trim().toLowerCase();
     if (t.length < 2) { res.innerHTML = '<p class="muted">Type at least 2 characters.</p>'; return; }
     const hits = cat.cards.filter((c) => (alt.checked || c.def) && (c.code.toLowerCase().includes(t) || c.en.toLowerCase().includes(t) || c.jp.includes(t))).slice(0, 40);
-    res.innerHTML = hits.map((c, i) => `<div class="pick" data-i="${i}">${cardImg(c)}<div><b>${esc(c.code)}</b> ${colorDot(c.color)} ${esc(c.rarity)}<br><span class="muted">${esc(c.name)}${c.parallel ? ' · alt art' : ''}</span></div><span class="muted">${c.jpy ? bnd(refBnd(c)) : ''}</span></div>`).join('') || '<p class="muted">No match.</p>';
+    res.innerHTML = hits.map((c, i) => `<div class="pick" data-i="${i}">${cardImg(c)}<div><b>${esc(c.code)}</b> ${colorDot(c.color)} ${esc(c.rarity)}<br><span class="muted">${esc(c.name)}${artShort(c) ? ' · ' + esc(artShort(c)) : ''}</span></div><span class="muted">${c.jpy ? bnd(refBnd(c)) : ''}</span></div>`).join('') || '<p class="muted">No match.</p>';
     res.querySelectorAll('.pick').forEach((p) => (p.onclick = () => { const c = hits[+p.dataset.i]; s.close(); onPick(c); }));
   };
   q.oninput = run; alt.onchange = run; run(); q.focus();
