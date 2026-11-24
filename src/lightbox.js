@@ -40,7 +40,7 @@ export function openLightbox(urls, i = 0, alts = []) {
   st = { urls, alts, i, s: 1, x: 0, y: 0, ptr: new Map(), pinch0: null, last: 0, sw: null };
   root = document.createElement('div');
   root.id = 'lb';
-  root.innerHTML = `<div class="lb-top"><span id="lb-n"></span><span class="lb-cap" id="lb-cap"></span><a id="lb-open" target="_blank" rel="noopener" title="Open original">↗</a><button id="lb-x" aria-label="Close">✕</button></div>
+  root.innerHTML = `<div class="lb-top"><span id="lb-n"></span><span class="lb-cap" id="lb-cap"></span><a id="lb-src" target="_blank" rel="noopener" title="View this card on Yuyutei" style="display:none;width:auto;border-radius:19px;padding:0 .8rem;font-size:.85rem;font-weight:700;white-space:nowrap;text-decoration:none">Yuyutei ↗</a><a id="lb-open" target="_blank" rel="noopener" title="Open original">↗</a><button id="lb-x" aria-label="Close">✕</button></div>
     <div class="lb-stage" id="lb-stage"><img id="lb-img" alt="" draggable="false"><div class="lb-load" id="lb-load">Loading…</div></div>
     ${urls.length > 1 ? '<button class="lb-nav l" id="lb-prev" aria-label="Previous">‹</button><button class="lb-nav r" id="lb-next" aria-label="Next">›</button>' : ''}
     <div class="lb-hint" id="lb-hint">Pinch or double-tap to zoom</div>`;
@@ -80,6 +80,8 @@ function show(i) {
   root.querySelector('#lb-n').textContent = st.urls.length > 1 ? `${st.i + 1} / ${st.urls.length}` : '';
   root.querySelector('#lb-cap').textContent = st.alts[st.i] || '';
   root.querySelector('#lb-open').href = url;
+  const ym = /card\.yuyu-tei\.jp\/opc\/(?:\d+_\d+|front)\/([a-z0-9-]+)\/([A-Za-z0-9-]+)\.jpg/.exec(url), src = root.querySelector('#lb-src');
+  src.style.display = ym ? '' : 'none'; if (ym) src.href = `https://yuyu-tei.jp/sell/opc/card/${ym[1]}/${ym[2]}`;
   apply();
 }
 function zoomAt(ns, cx, cy) {

@@ -117,6 +117,9 @@ export const catImg = (c, size = '250_350') => `${IMG_BASE}${size}/${c.set}/${c.
 // Re-point a catalogue image URL (e.g. one stored in an older listing) at another size; other URLs (seller photos) are untouched.
 export const upImg = (url, size = '250_350') => (url || '').replace(/(card\.yuyu-tei\.jp\/opc\/)(?:\d+_\d+|front)(\/)/, `$1${size}$2`);
 const isCat = (url) => /card\.yuyu-tei\.jp\/opc\//.test(url || '');
+// Source page of a catalogue card on Yuyutei (the picture URL .../opc/<size>/<set>/<number>.jpg maps to /sell/opc/card/<set>/<number>)
+export const yuyuCard = (set, num) => `https://yuyu-tei.jp/sell/opc/card/${set}/${num}`;
+export const yuyuFromImg = (url) => { const m = /card\.yuyu-tei\.jp\/opc\/(?:\d+_\d+|front)\/([a-z0-9-]+)\/([A-Za-z0-9-]+)\.jpg/.exec(url || ''); return m ? yuyuCard(m[1], m[2]) : null; };
 // Show a small image straight away, then swap in the sharp one when it has loaded.
 export function sharpen(img, hiUrl) {
   if (!img || !hiUrl) return;

@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard } from '../lib.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
 
@@ -116,8 +116,8 @@ export async function viewCard($app, code) {
     cur = v;
     const mi = $app.querySelector('#mainimg'); mi.src = catImg(v); sharpen(mi, catImg(v, 'front'));
     $app.querySelectorAll('.thumbs img').forEach((i) => i.classList.toggle('on', i.dataset.ref === v.ref));
-    $app.querySelector('#vinfo').innerHTML = `<b>${esc(v.rarity)}</b> ${v.art && v.art !== 'std' ? '· ' + ART[v.art][0] : ''}<br><span class="price">${v.jpy ? bnd(refBnd(v)) : 'No price'}</span> <span class="muted">reference${v.jpy ? ` (¥${v.jpy.toLocaleString()} Yuyutei)` : ''}</span>${state.user ? `<br>You own: <b>${inv.get(v.ref) || 0}</b>` : ''}`;
-    $app.querySelector('#vact').innerHTML = `${state.user ? `<button class="btn sec" id="addinv">+ Add to inventory</button>` : ''}<a class="btn" href="#/sell/${esc(v.ref)}">Sell this card</a><button class="btn sec" id="zoom">Enlarge</button>`;
+    $app.querySelector('#vinfo').innerHTML = `<b>${esc(v.rarity)}</b> ${v.art && v.art !== 'std' ? '· ' + ART[v.art][0] : ''}<br><span class="price">${v.jpy ? bnd(refBnd(v)) : 'No price'}</span> <span class="muted">reference${v.jpy ? ` (¥${v.jpy.toLocaleString()} <a href="${esc(yuyuCard(v.set, v.num))}" target="_blank" rel="noopener">Yuyutei ↗</a>)` : ''}</span>${state.user ? `<br>You own: <b>${inv.get(v.ref) || 0}</b>` : ''}`;
+    $app.querySelector('#vact').innerHTML = `${state.user ? `<button class="btn sec" id="addinv">+ Add to inventory</button>` : ''}<a class="btn" href="#/sell/${esc(v.ref)}">Sell this card</a><button class="btn sec" id="zoom">Enlarge</button><a class="btn sec" target="_blank" rel="noopener" href="${esc(yuyuCard(v.set, v.num))}">🔗 View on Yuyutei</a>`;
     const a = $app.querySelector('#addinv'); if (a) a.onclick = guard(async () => { await invAdjust(v.ref, 1); toast('Added to inventory'); show(v); });
     $app.querySelector('#zoom').onclick = () => enlarge(v);
   };

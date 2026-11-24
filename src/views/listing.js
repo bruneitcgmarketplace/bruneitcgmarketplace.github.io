@@ -1,7 +1,7 @@
 import { addToCart, removeFromCart, inCart } from '../cart.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, shareReceipt, canShareFiles, priceDiff, fmtDelta } from '../receipt.js';
 import { soldSheet } from '../sold.js';
-import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge, yuyuCard, yuyuFromImg } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
   const cat = await loadCatalog();
@@ -51,16 +51,17 @@ export async function viewListing($app, id, setUnsub) {
     else if (l.status === 'ended') actions = `<div class="notice">Auction ended without a sale.</div>`;
     else if (l.status === 'cancelled') actions = `<div class="notice">Listing cancelled.</div>`;
 
+    const yy = yuyuFromImg(l.catalog_image) || (c ? yuyuCard(c.set, c.num) : null);
     const diff = ref > 0 ? Math.round(((shown - ref) / ref) * 100) : null;
     $app.innerHTML = `<p><a href="javascript:history.back()">← Back</a></p><div class="detail"><div>
       <img class="main${held ? ' held-img' : ''}" id="mainimg" src="${esc(small(photos[0] || ''))}" alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
       <div class="thumbs">${photos.length > 1 || l.photos?.length ? photos.map((p) => `<img src="${esc(thumb(p))}" data-src="${esc(p)}" alt="">`).join('') : ''}</div>
-      ${l.photos?.length ? '' : '<p class="muted">Catalogue image only. Ask the seller for photos of the actual card.</p>'}</div>
+      ${l.photos?.length ? '' : '<p class="muted">Catalogue image only. Ask the seller for photos of the actual card.</p>'}${yy ? `<p class="muted"><a href="${esc(yy)}" target="_blank" rel="noopener">🔗 View this card on Yuyutei</a></p>` : ''}</div>
       <div><h1>${esc(c?.name || l.card_name)}</h1>
       <p class="muted"><a href="#/card/${esc(l.card_code)}">${esc(l.card_code)}</a> · ${esc(l.rarity || '')} · ${esc((l.set_id || '').toUpperCase())} · Condition ${esc(l.condition)} · ${esc(l.language)}</p>
       <p><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}"${held ? ' style="background:#a3a8b0;border-color:#a3a8b0"' : ''}>${held ? 'On hold' : l.type === 'auction' ? 'Auction' : 'Buy now'}</span></p>
       <p class="price" style="font-size:1.5rem">${bnd(shown)}</p>
-      ${ref > 0 ? `<p class="muted">Reference ${bnd(ref)} (Yuyutei JP shop price)${l.type === 'buy_now' && diff !== null ? ` · ${diff <= 0 ? Math.abs(diff) + '% below' : diff + '% above'} reference` : ''}. Condition and local demand affect the real value.</p>` : ''}
+      ${ref > 0 ? `<p class="muted">Reference ${bnd(ref)} (${yy ? `<a href="${esc(yy)}" target="_blank" rel="noopener">Yuyutei JP shop price ↗</a>` : 'Yuyutei JP shop price'})${l.type === 'buy_now' && diff !== null ? ` · ${diff <= 0 ? Math.abs(diff) + '% below' : diff + '% above'} reference` : ''}. Condition and local demand affect the real value.</p>` : ''}
       ${l.type === 'auction' ? `<p>${l.bid_count} bids${l.bidder ? ` · leader ${esc(l.bidder.display_name)}` : ''}<br>${l.status === 'active' ? 'Ends in ' + timerHtml(l.ends_at, true) : 'Ended'}</p>` : ''}
       <p>Seller: <b>${esc(l.seller?.display_name)}</b></p>
       ${l.description ? `<p>${esc(l.description)}</p>` : ''}
