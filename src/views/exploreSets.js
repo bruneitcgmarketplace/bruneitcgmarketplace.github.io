@@ -1,5 +1,5 @@
 // Explore: One Piece sets with actual product photos and a full filter panel.
-import { sb, state, esc, bnd, loadCatalog, loadInv, refBnd, cardImg, sheet } from '../lib.js';
+import { sb, state, esc, bnd, loadCatalog, loadInv, refBnd, cardImg, sheet, ART, artShort } from '../lib.js';
 
 // ---------- set icon (booster box) ----------
 const GROUPS = [
@@ -33,12 +33,12 @@ const COLOURS = [['Red', '#e0343c'], ['Green', '#2fc76d'], ['Blue', '#2c8fe0'], 
 const TYPES = ['Leader', 'Character', 'Event', 'Stage', 'DON!!'];
 const ATTRS = ['Slash', 'Strike', 'Ranged', 'Special', 'Wisdom'];
 const SORTS = [['new', 'Newest set first'], ['plow', 'Price: low to high'], ['phigh', 'Price: high to low'], ['name', 'Name A to Z'], ['code', 'Card number']];
-const FRESH = () => ({ q: '', groups: [], sets: [], rar: [], col: [], colAll: false, type: [], art: 'all', pmin: '', pmax: '', cmin: '', cmax: '', wmin: '', wmax: '', counter: [], life: [], attr: [], trait: '', kw: [], own: 'all', sale: false, sort: 'new' });
+const FRESH = () => ({ q: '', groups: [], sets: [], rar: [], col: [], colAll: false, type: [], arts: [], pmin: '', pmax: '', cmin: '', cmax: '', wmin: '', wmax: '', counter: [], life: [], attr: [], trait: '', kw: [], own: 'all', sale: false, sort: 'new' });
 const NEEDS_INFO = (f) => f.cmin !== '' || f.cmax !== '' || f.wmin !== '' || f.wmax !== '' || f.counter.length || f.life.length || f.attr.length || f.trait || f.kw.length;
 const num = (v) => (v === '' || v == null ? null : Number(v));
 
 function activeCount(f) {
-  return (f.groups.length ? 1 : 0) + (f.sets.length ? 1 : 0) + (f.rar.length ? 1 : 0) + (f.col.length ? 1 : 0) + (f.type.length ? 1 : 0) + (f.art !== 'all' ? 1 : 0)
+  return (f.groups.length ? 1 : 0) + (f.sets.length ? 1 : 0) + (f.rar.length ? 1 : 0) + (f.col.length ? 1 : 0) + (f.type.length ? 1 : 0) + (f.arts.length ? 1 : 0)
     + ((f.pmin !== '' || f.pmax !== '') ? 1 : 0) + ((f.cmin !== '' || f.cmax !== '') ? 1 : 0) + ((f.wmin !== '' || f.wmax !== '') ? 1 : 0) + (f.counter.length ? 1 : 0) + (f.life.length ? 1 : 0)
     + (f.attr.length ? 1 : 0) + (f.trait ? 1 : 0) + (f.kw.length ? 1 : 0) + (f.own !== 'all' ? 1 : 0) + (f.sale ? 1 : 0);
 }
@@ -55,8 +55,7 @@ function apply(f, cards, inv, saleCodes, det) {
     if (f.rar.length && !f.rar.includes(c.rarity)) return false;
     if (f.type.length && !(f.type.includes(c.type) || (f.type.includes('DON!!') && c.rarity === '-'))) return false;
     if (f.col.length) { const cc = (c.color || '').split(' ').filter(Boolean); if (f.colAll ? !f.col.every((x) => cc.includes(x)) : !f.col.some((x) => cc.includes(x))) return false; }
-    if (f.art === 'std' && c.parallel) return false;
-    if (f.art === 'alt' && !c.parallel) return false;
+    if (f.arts.length && !f.arts.includes(c.art)) return false;
     if (pmin != null || pmax != null) { const p = c.jpy ? refBnd(c) : null; if (p == null || (pmin != null && p < pmin) || (pmax != null && p > pmax)) return false; }
     if (f.own !== 'all' && (f.own === 'owned') !== inv.has(c.ref)) return false;
     if (f.sale && !saleCodes.has(c.code)) return false;
@@ -99,7 +98,7 @@ export async function viewExplore($app) {
     if (f.rar.length) add('Rarity ' + f.rar.map((r) => (r === '-' ? 'DON!!' : r)).join('/'), () => (f.rar = []));
     if (f.col.length) add((f.colAll ? 'All of ' : '') + f.col.join('/'), () => (f.col = []));
     if (f.type.length) add(f.type.join('/'), () => (f.type = []));
-    if (f.art !== 'all') add(f.art === 'alt' ? 'Alt art' : 'Standard art', () => (f.art = 'all'));
+    if (f.arts.length) add(f.arts.map((a) => ART[a][1]).join('/'), () => (f.arts = []));
     if (f.pmin !== '' || f.pmax !== '') add(`BND ${f.pmin || 0}–${f.pmax || '∞'}`, () => { f.pmin = f.pmax = ''; });
     if (f.cmin !== '' || f.cmax !== '') add(`Cost ${f.cmin || 0}–${f.cmax || '∞'}`, () => { f.cmin = f.cmax = ''; });
     if (f.wmin !== '' || f.wmax !== '') add(`Power ${f.wmin || 0}–${f.wmax || '∞'}`, () => { f.wmin = f.wmax = ''; });
@@ -130,7 +129,7 @@ export async function viewExplore($app) {
       const { list, noInfo } = apply(f, cat.cards, inv, saleCodes || new Set(), NEEDS_INFO(f) ? info : null);
       const page = list.slice(0, shown);
       body = `<div class="muted" style="margin:.2rem 0 .6rem"><b>${list.length}</b> card${list.length === 1 ? '' : 's'} found${noInfo ? ` · ${noInfo} newer cards have no stats yet and are hidden by stat filters` : ''}</div>
-        <div class="grid">${page.map((c) => { const q = inv.get(c.ref); return `<a class="tile" href="#/card/${esc(c.code)}">${cardImg(c)}<div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity === '-' ? 'DON!!' : c.rarity)}${q ? ` · ×${q}` : ''}</div><div class="nm">${esc(c.name)}</div><div class="price">${c.jpy ? bnd(refBnd(c)) : ''}</div></div></a>`; }).join('')}</div>
+        <div class="grid">${page.map((c) => { const q = inv.get(c.ref); return `<a class="tile" href="#/card/${esc(c.code)}">${cardImg(c)}<div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity === '-' ? 'DON!!' : c.rarity)}${artShort(c) ? ' · ' + esc(artShort(c)) : ''}${q ? ` · ×${q}` : ''}</div><div class="nm">${esc(c.name)}</div><div class="price">${c.jpy ? bnd(refBnd(c)) : ''}</div></div></a>`; }).join('')}</div>
         ${list.length > shown ? `<p class="center"><button class="btn sec" id="more">Show more (${list.length - shown} left)</button></p>` : ''}${list.length ? '' : '<div class="panel empty"><p>No cards match these filters.</p><button class="btn" id="reset2">Clear filters</button></div>'}`;
     }
     $app.innerHTML = `<div class="head"><h1>Explore</h1></div>
@@ -159,7 +158,7 @@ export async function viewExplore($app) {
         <div class="fsec"><h3>Rarity</h3><div class="fcs">${chipRow('rar', RARITIES.map(([v, l]) => [v, v === '-' ? 'DON!!' : `${v}`]))}</div><div class="muted">L leader · C common · UC uncommon · R rare · SR super rare · SEC secret · SP special · TR treasure · P-… alternate art · DON!! cards</div></div>
         <div class="fsec"><h3>Colour</h3><div class="fcs">${chipRow('col', COLOURS.map(([n, c]) => [n, n, c]))}</div><label class="inline"><input type="checkbox" id="colAll" ${f.colAll ? 'checked' : ''} style="width:auto"> Must have all selected colours (multicolour cards)</label></div>
         <div class="fsec"><h3>Card type</h3><div class="fcs">${chipRow('type', TYPES.map((t) => [t, t]))}</div></div>
-        <div class="fsec"><h3>Art</h3><div class="fcs">${chipRow('art', [['all', 'All arts'], ['std', 'Standard art'], ['alt', 'Alternate art']], false)}</div></div>
+        <div class="fsec"><h3>Art type</h3><div class="fcs">${chipRow('arts', Object.entries(ART).map(([k, v]) => [k, v[0]]))}</div><div class="muted">Manga = Japanese Super Parallel (Yuyutei label). Alternate art = other parallels. Foil = lame, pirate flag and stamped foils.</div></div>
         <div class="fsec"><h3>Reference price (BND)</h3><div class="row tight"><input type="number" id="pmin" min="0" step="0.5" placeholder="Min" value="${esc(f.pmin)}" style="max-width:110px"><span>to</span><input type="number" id="pmax" min="0" step="0.5" placeholder="Max" value="${esc(f.pmax)}" style="max-width:110px"></div></div>
         <div class="fsec"><h3>Cost</h3><div class="row tight"><input type="number" id="cmin" min="0" max="10" placeholder="Min" value="${esc(f.cmin)}" style="max-width:110px"><span>to</span><input type="number" id="cmax" min="0" max="10" placeholder="Max" value="${esc(f.cmax)}" style="max-width:110px"></div></div>
         <div class="fsec"><h3>Power</h3><div class="row tight"><input type="number" id="wmin" min="0" step="1000" placeholder="Min" value="${esc(f.wmin)}" style="max-width:110px"><span>to</span><input type="number" id="wmax" min="0" step="1000" placeholder="Max" value="${esc(f.wmax)}" style="max-width:110px"></div></div>
