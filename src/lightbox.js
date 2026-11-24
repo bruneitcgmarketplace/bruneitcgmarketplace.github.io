@@ -4,7 +4,7 @@
 
 const BASE_RE = /(card\.yuyu-tei\.jp\/opc\/)(?:\d+_\d+|front)(\/)/;
 const hiUrl = (src) => (src || '').replace(BASE_RE, '$1front$2');
-const isTiny = (el) => el.closest('#top, #drawer, .av, .avatar, .pick, .dr-head') || el.classList.contains('avatar') || el.closest('#lb');
+const isTiny = (el) => el.closest('#top, #drawer, .av, .avatar, .pick, .dr-head') || el.classList.contains('avatar') || el.closest('#lb') || el.dataset.missing;
 
 let root = null, st = null;
 

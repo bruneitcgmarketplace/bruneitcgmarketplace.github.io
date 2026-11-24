@@ -44,6 +44,15 @@ const ICON = {
   user: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
   cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.1l2-8H6.4"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
 };
+// A few newly released special arts have no photo on Yuyutei yet (HTTP 404). Show a neutral placeholder instead of an empty tile; never another card's art.
+const NO_PHOTO = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 350"><rect width="250" height="350" fill="#f1f3f6"/><rect x="12" y="12" width="226" height="326" rx="10" fill="none" stroke="#c9d0da" stroke-width="2" stroke-dasharray="6 5"/><text x="125" y="170" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#6b7685">Photo</text><text x="125" y="196" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#6b7685">not available</text></svg>');
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || img.dataset.missing || !img.closest('#app') || !/card\.yuyu-tei\.jp\/opc\//.test(img.currentSrc || img.src)) return;
+  e.stopPropagation(); // skip the inline onerror that would hide the tile
+  img.dataset.missing = '1'; img.removeAttribute('data-hd'); img.removeAttribute('data-src'); img.removeAttribute('data-ref');
+  img.style.visibility = 'visible'; img.src = NO_PHOTO;
+}, true);
 window.addEventListener('cart-changed', () => { const el = document.getElementById('cart-n'); if (!el) return; const n = state.user ? cartIds().length : 0; el.textContent = n; el.hidden = !n; });
 
 function renderChrome(page) {
