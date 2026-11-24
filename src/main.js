@@ -16,6 +16,7 @@ import { viewListing } from './views/listing.js';
 import { viewSell } from './views/sell.js';
 import { viewMembership, viewAdmin } from './views/admin.js';
 import { viewReport } from './views/report.js';
+import { fallbackFor } from './fallback.js';
 import { viewProblems } from './views/problems.js';
 
 const $app = document.getElementById('app');
@@ -52,6 +53,8 @@ document.addEventListener('error', (e) => {
   const img = e.target;
   if (!(img instanceof HTMLImageElement) || img.dataset.missing || !img.closest('#app') || !/card\.yuyu-tei\.jp\/opc\//.test(img.currentSrc || img.src)) return;
   e.stopPropagation(); // skip the inline onerror that would hide the tile
+  const fb = img.dataset.fb ? null : fallbackFor(img.currentSrc || img.src);   // backup picture for the few cards Yuyutei has no photo for
+  if (fb) { img.dataset.fb = '1'; img.removeAttribute('data-hd'); img.removeAttribute('data-src'); img.style.visibility = 'visible'; img.src = fb; return; }
   img.dataset.missing = '1'; img.removeAttribute('data-hd'); img.removeAttribute('data-src'); img.removeAttribute('data-ref');
   img.style.visibility = 'visible'; img.src = NO_PHOTO;
 }, true);

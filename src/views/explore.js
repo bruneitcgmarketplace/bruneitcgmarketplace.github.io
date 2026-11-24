@@ -1,4 +1,5 @@
 import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard } from '../lib.js';
+import { fallbackNote } from '../fallback.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
 
@@ -118,8 +119,8 @@ export async function viewCard($app, code) {
   const show = (v) => {
     cur = v;
     const yu = yuyuCard(v.set, v.num);
-    $app.querySelector('#ysrc').innerHTML = `Source: <a href="${esc(yu)}" target="_blank" rel="noopener">${esc(yu.replace('https://', ''))} ↗</a><br><span class="muted">If the photo is missing here, open this page on Yuyutei.</span>`;
-    const mi = $app.querySelector('#mainimg'); mi.src = catImg(v); sharpen(mi, catImg(v, 'front'));
+    $app.querySelector('#ysrc').innerHTML = `Source: <a href="${esc(yu)}" target="_blank" rel="noopener">${esc(yu.replace('https://', ''))} ↗</a><br><span class="muted">If the photo is missing here, open this page on Yuyutei.</span>${fallbackNote(v.set, v.num) ? `<br><span class="muted">Photo: ${esc(fallbackNote(v.set, v.num))}.</span>` : ''}`;
+    const mi = $app.querySelector('#mainimg'); mi.removeAttribute('data-fb'); mi.removeAttribute('data-missing'); mi.style.visibility = ''; mi.src = catImg(v); sharpen(mi, catImg(v, 'front'));
     $app.querySelectorAll('.thumbs img').forEach((i) => i.classList.toggle('on', i.dataset.ref === v.ref));
     $app.querySelector('#vinfo').innerHTML = `<b>${esc(v.rarity)}</b> ${v.art && v.art !== 'std' ? '· ' + ART[v.art][0] : ''}<br><span class="price">${v.jpy ? bnd(refBnd(v)) : 'No price'}</span> <span class="muted">reference${v.jpy ? ` (¥${v.jpy.toLocaleString()} <a href="${esc(yuyuCard(v.set, v.num))}" target="_blank" rel="noopener">Yuyutei ↗</a>)` : ''}</span>${state.user ? `<br>You own: <b>${inv.get(v.ref) || 0}</b>` : ''}`;
     $app.querySelector('#vact').innerHTML = `${state.user ? `<button class="btn sec" id="addinv">+ Add to inventory</button>` : ''}<a class="btn" href="#/sell/${esc(v.ref)}">Sell this card</a><button class="btn sec" id="zoom">Enlarge</button><a class="btn sec" target="_blank" rel="noopener" href="${esc(yuyuCard(v.set, v.num))}">🔗 View on Yuyutei</a>`;

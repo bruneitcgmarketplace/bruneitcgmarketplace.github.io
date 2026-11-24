@@ -2,6 +2,7 @@
 // catalogue images -> Yuyutei 'front' (500x700, the largest they serve); seller photos -> the uploaded file (up to 1600 px).
 // Pinch / wheel / double-tap to zoom, drag to pan, swipe or arrow keys between photos in the same group.
 
+import { fallbackFor } from './fallback.js';
 const BASE_RE = /(card\.yuyu-tei\.jp\/opc\/)(?:\d+_\d+|front)(\/)/;
 const hiUrl = (src) => (src || '').replace(BASE_RE, '$1front$2');
 const isTiny = (el) => el.closest('#top, #drawer, .av, .avatar, .pick, .dr-head') || el.classList.contains('avatar') || el.closest('#lb') || el.dataset.missing;
@@ -73,8 +74,8 @@ function show(i) {
   const im = root.querySelector('#lb-img'), url = st.urls[st.i], load = root.querySelector('#lb-load');
   load.style.display = ''; im.style.opacity = '.35';
   const hi = new Image();
-  hi.onload = () => { if (!root || st.urls[st.i] !== url) return; im.src = url; im.style.opacity = '1'; load.style.display = 'none'; apply(); };
-  hi.onerror = () => { if (!root) return; load.textContent = 'Could not load this photo'; };
+  hi.onload = () => { if (!root || st.urls[st.i] !== url) return; im.src = hi.src; im.style.opacity = '1'; load.style.display = 'none'; apply(); };
+  hi.onerror = () => { if (!root) return; const fb = fallbackFor(url); if (fb && hi.src !== fb) { hi.src = fb; return; } load.textContent = 'Could not load this photo'; };
   im.src = url.replace(BASE_RE, '$1250_350$2');           // instant preview while the sharp file loads (cached from the grid)
   hi.src = url;
   root.querySelector('#lb-n').textContent = st.urls.length > 1 ? `${st.i + 1} / ${st.urls.length}` : '';
