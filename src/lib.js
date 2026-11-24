@@ -231,16 +231,16 @@ export function tile(l) {
 // ---------- card picker (search the catalogue) ----------
 export async function cardPicker(onPick, { title = 'Find a card' } = {}) {
   const cat = await loadCatalog();
-  const s = sheet(`<h2>${esc(title)}</h2><input id="cp-q" placeholder="Code or name, e.g. OP05-060 or Luffy" autocomplete="off"><label class="inline"><input type="checkbox" id="cp-alt" style="width:auto"> Include alternate arts</label><div id="cp-res" class="pick-list"></div>`);
-  const q = s.el.querySelector('#cp-q'), res = s.el.querySelector('#cp-res'), alt = s.el.querySelector('#cp-alt');
+  const s = sheet(`<h2>${esc(title)}</h2><input id="cp-q" placeholder="Code or name, e.g. OP05-060 or Luffy" autocomplete="off"><div id="cp-res" class="pick-list"></div>`);
+  const q = s.el.querySelector('#cp-q'), res = s.el.querySelector('#cp-res');
   const run = () => {
     const t = q.value.trim().toLowerCase();
     if (t.length < 2) { res.innerHTML = '<p class="muted">Type at least 2 characters.</p>'; return; }
-    const hits = cat.cards.filter((c) => (alt.checked || c.def) && (c.code.toLowerCase().includes(t) || c.en.toLowerCase().includes(t) || c.jp.includes(t))).slice(0, 40);
+    const hits = cat.cards.filter((c) => (c.code.toLowerCase().includes(t) || c.en.toLowerCase().includes(t) || c.jp.includes(t))).slice(0, 60);
     res.innerHTML = hits.map((c, i) => `<div class="pick" data-i="${i}">${cardImg(c)}<div><b>${esc(c.code)}</b> ${colorDot(c.color)} ${esc(c.rarity)}<br><span class="muted">${esc(c.name)}${artShort(c) ? ' · ' + esc(artShort(c)) : ''}</span></div><span class="muted">${c.jpy ? bnd(refBnd(c)) : ''}</span></div>`).join('') || '<p class="muted">No match.</p>';
     res.querySelectorAll('.pick').forEach((p) => (p.onclick = () => { const c = hits[+p.dataset.i]; s.close(); onPick(c); }));
   };
-  q.oninput = run; alt.onchange = run; run(); q.focus();
+  q.oninput = run; run(); q.focus();
 }
 
 export function enlarge(c) {
