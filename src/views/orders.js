@@ -70,12 +70,12 @@ export async function viewOrders($app, opts = {}) {
     const dcls = pd?.changed ? (role === 'buy' ? (pd.delta < 0 ? 'ok' : 'bad') : (pd.delta < 0 ? 'warn' : 'ok')) : '';
     const acts = [];
     if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
-    if (role === 'sell' && l.status === 'active' && l.bid_count === 0) acts.push(['cancel', 'Cancel listing', 'bad']);
+    if (role === 'sell' && l.status === 'active' && l.bid_count === 0) { if (l._ids?.length > 1) acts.push(['cancel', 'Cancel 1', 'bad'], ['cancelall', `Cancel all ${l._ids.length}`, 'bad']); else acts.push(['cancel', 'Cancel listing', 'bad']); }
     if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
     if (l.status === 'sold') acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
     if (l.status === 'sold' && l.buyer_id) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
-      <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${stChip(l, uid, role)}</div>
+      <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${l._ids?.length > 1 ? ` <span class="qtag s">×${l._ids.length}</span>` : ''}${stChip(l, uid, role)}</div>
         <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
         <div><span class="price">${bnd(pd ? pd.final : price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
@@ -93,6 +93,7 @@ export async function viewOrders($app, opts = {}) {
       if (a === 'receipt') { const { data: row } = await sb.from('listings').select(sel).eq('id', id).single(); downloadReceipt(receiptData(row, state.cat.byRef.get(row.card_ref)?.name || row.card_name)); return; }
       if (a === 'release') await rpc('seller_release', { p_listing: id, p_no_show: false });
       if (a === 'noshow') { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal. At 3 strikes they are blocked.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); }
+      if (a === 'cancelall') { const ids = LST.get(id)._ids || [id]; if (!(await confirmSheet(`Cancel all ${ids.length}?`, `All ${ids.length} identical listings will be removed.`, `Cancel ${ids.length}`, true))) return; let n = 0; for (const x of ids) { try { await rpc('cancel_listing', { p_listing: x }); n++; } catch { /* sold or taken meanwhile */ } } toast(`${n} cancelled`); reload(); return; }
       if (a === 'cancel') { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); }
       if (a === 'unreserve') await rpc('cancel_reservation', { p_listing: id });
       toast('Done'); reload();
@@ -110,9 +111,11 @@ export async function viewOrders($app, opts = {}) {
     body.innerHTML = `<h2>Active bids</h2>${bidding.length ? (await Promise.all(bidding.map((l) => card(l, 'buy')))).join('') : '<p class="muted">No active bids. <a href="#/market?type=auction">Browse auctions</a></p>'}
       <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${reportPanel('buy')}${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
   } else if (tab === 'selling') {
-    const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved', 'ended', 'cancelled']).order('created_at', { ascending: false }).limit(80);
+    const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved', 'ended', 'cancelled']).order('created_at', { ascending: false }).limit(1000);
     const g = (s) => (data || []).filter((l) => s.includes(l.status));
-    const sect = async (t, arr, empty) => `<h2>${t}</h2>${arr.length ? (await Promise.all(arr.map((l) => card(l, 'sell')))).join('') : `<p class="muted">${empty}</p>`}`;
+    // identical active Buy now listings (same card, condition, language, price) become one card with a quantity
+    const combine = (arr) => { const m = new Map(), out = []; for (const l of arr) { if (l.type !== 'buy_now' || l.status !== 'active') { out.push(l); continue; } const k = [l.card_ref, l.condition, l.language, l.price].join('|'); const g = m.get(k); if (g) g._ids.push(l.id); else { const r = { ...l, _ids: [l.id] }; m.set(k, r); out.push(r); } } return out; };
+    const sect = async (t, arr, empty) => `<h2>${t}</h2>${arr.length ? (await Promise.all(combine(arr).map((l) => card(l, 'sell')))).join('') : `<p class="muted">${empty}</p>`}`;
     body.innerHTML = `${only ? '' : '<p><a class="btn" href="#/sell">+ New listing</a></p>'}${await sect('Needs settlement', g(['reserved']), 'None.')}<div style="height:.8rem"></div>${await sect('Active listings', g(['active']), 'No active listings.')}<div style="height:.8rem"></div>${await sect('Ended and cancelled', g(['ended', 'cancelled']).slice(0, 15), 'None.')}`;
   } else {
     const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).eq('status', 'sold').order('created_at', { ascending: false }).limit(200);
