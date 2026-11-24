@@ -90,35 +90,11 @@ input:focus,select:focus,textarea:focus { border-color:var(--sanji); box-shadow:
 /* Camera and full-screen photo viewer deliberately stay dark. */
 .vhint { color:#e2e8f0; } .guide i { border-color:var(--straw); }
 
-/* One Piece TCG wordmark: tall flared capitals, blue gradient with navy outline, red crew-figure I (as in the anime title).
-   Gear 5 + Conqueror's Haki aura: soft pulsing white/red glow with drifting sparks and a flickering haki arc; no box or border. */
-@font-face { font-family:'Cinzel'; src:url('/fonts/cinzel-800.woff2') format('woff2'); font-weight:800; font-display:swap; }
-#top .brand { position:relative; display:inline-flex; align-items:center; gap:.5rem; margin-left:.15rem; padding:.2rem .25rem; background:none; border:0; }
-#top .brand .flag { position:relative; z-index:1; width:42px; height:21px; border-radius:3px; display:block; flex:none; animation:haki-flag 2.4s ease-in-out infinite; }
-#top .brand .op { position:relative; z-index:1; display:inline-flex; align-items:center; font-family:'Cinzel','Times New Roman',serif; font-weight:800; font-size:1rem; line-height:1; letter-spacing:.07em; text-transform:uppercase; white-space:nowrap;
-  background:linear-gradient(180deg,#59b4f2 0%,#2a7fd6 42%,#123f93 100%); -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent;
-  filter:drop-shadow(.8px 0 0 #0b1c4d) drop-shadow(-.8px 0 0 #0b1c4d) drop-shadow(0 .8px 0 #0b1c4d) drop-shadow(0 -.8px 0 #0b1c4d); }
-#top .brand .op svg { width:.52em; height:1.05em; margin:0 .08em 0 .02em; flex:none; }
-/* aura layers sit behind everything */
-#top .brand .aura { position:absolute; inset:-6px -8px; z-index:0; pointer-events:none; border-radius:50%; background:radial-gradient(ellipse at 50% 50%, #ffffff 0%, #ffffffcc 20%, #ff2a3a33 55%, #14080a14 72%, transparent 78%); filter:blur(5px); animation:haki-breathe 2.6s ease-in-out infinite; }
-#top .brand .aura::before,#top .brand .aura::after { content:''; position:absolute; left:6%; right:6%; top:50%; height:2px; border-radius:2px; background:linear-gradient(90deg,transparent,#ff2a3a,#14080a,#ff2a3a,transparent); filter:blur(.6px); opacity:0; animation:haki-arc 3.4s linear infinite; }
-#top .brand .aura::after { top:78%; animation-delay:1.6s; }
-#top .brand .sp { position:absolute; z-index:2; width:3px; height:3px; border-radius:50%; background:#fff; box-shadow:0 0 5px 1.5px #ff2a3a; opacity:0; pointer-events:none; animation:haki-spark 2.8s ease-in-out infinite; }
-#top .brand .sp.s1 { left:2px; top:2px; } #top .brand .sp.s2 { right:4px; top:3px; animation-delay:.9s; } #top .brand .sp.s3 { right:30%; bottom:1px; animation-delay:1.7s; } #top .brand .sp.s4 { left:34%; top:0; animation-delay:2.2s; }
-@keyframes haki-breathe { 0%,100% { opacity:.55; transform:scale(.97); } 50% { opacity:1; transform:scale(1.04); } }
-@keyframes haki-flag { 0%,100% { box-shadow:0 0 0 0 #ff2a3a00, 0 0 6px 0 #14080a40; } 50% { box-shadow:0 0 0 1px #ff2a3a66, 0 0 10px 2px #ff2a3a59; } }
-@keyframes haki-arc { 0%,70%,100% { opacity:0; transform:scaleX(.4); } 78% { opacity:.9; transform:scaleX(1); } 86% { opacity:.2; } 92% { opacity:.8; transform:scaleX(.9) skewX(8deg); } }
-@keyframes haki-spark { 0%,100% { opacity:0; transform:translateY(2px) scale(.4); } 45% { opacity:1; transform:translateY(-3px) scale(1.15); } 80% { opacity:0; transform:translateY(-6px) scale(.5); } }
-@media (max-width:380px) { #top .brand .op { font-size:.88rem; } #top .brand .flag { width:36px; height:18px; } }
-@media (prefers-reduced-motion:reduce) { #top .brand .aura,#top .brand .aura::before,#top .brand .aura::after,#top .brand .sp,#top .brand .flag { animation:none; } #top .brand .sp { display:none; } #top .brand .aura::before,#top .brand .aura::after { display:none; } }
 .bad-link { color:var(--bad); border-color:var(--bad); }
 #sh-url { width:100%; font-size:.85rem; }
 /* Inventory header: let the Share / Grid / Add buttons wrap neatly on narrow phones */
 .head { flex-wrap:wrap; } .head .row.tight { flex-wrap:wrap; gap:.4rem; } .head .btn { padding:.45rem .7rem; }
 
-/* Image wordmark (ship wheel + Brunei crest + ONE PIECE TCG) with Gear 5 haki aura */
-#top .brand .wm { position:relative; z-index:1; height:42px; width:auto; display:block; animation:haki-flag 2.4s ease-in-out infinite; border-radius:0; box-shadow:none; filter:drop-shadow(0 0 4px #ff2a3a55); }
-@keyframes haki-glow { 0%,100% { filter:drop-shadow(0 0 2px #ff2a3a33); } 50% { filter:drop-shadow(0 0 7px #ff2a3acc); } }
-#top .brand .wm { animation-name:haki-glow; }
-@media (max-width:380px) { #top .brand .wm { height:36px; } }
-@media (prefers-reduced-motion:reduce) { #top .brand .wm { animation:none; } }
+/* Plain text brand: One Piece TCG in the site font (overrides the earlier logo/aura experiments) */
+#top .brand { display:block; position:static; padding:0; margin:0 0 0 .2rem; background:none; border:0; animation:none; font-size:1.05rem; font-weight:800; letter-spacing:.01em; line-height:1.1; white-space:nowrap; }
+#top .brand .b1 { color:var(--luffy); } #top .brand .b2 { color:var(--fg); display:inline; }
