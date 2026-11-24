@@ -51,7 +51,7 @@ function renderChrome(page) {
   const items = MENU;
   const n = signed ? cartIds().length : 0;
   $top.innerHTML = `<div class="top-row">
-      <a class="brand" href="#/"><span class="aura"></span><i class="sp s1"></i><i class="sp s2"></i><i class="sp s3"></i><i class="sp s4"></i><img class="flag" src="./flag.svg" alt="Brunei" width="42" height="21"><span class="op" aria-label="One Piece TCG"><span>One P</span><svg viewBox="0 0 10 22" aria-hidden="true"><g fill="#e3202f" stroke="#0b1c4d" stroke-width=".7" stroke-linejoin="round"><circle cx="5" cy="3.1" r="2.6"/><path d="M2 7h6l1.4 6.6h-2V21H5.6v-5.2h-1.2V21H2.6v-7.4h-2z"/></g></svg><span>ece</span>&nbsp;<span>TCG</span></span></a><span class="grow"></span>
+      <a class="brand" href="#/"><span class="aura"></span><i class="sp s1"></i><i class="sp s2"></i><i class="sp s3"></i><i class="sp s4"></i><img class="wm" src="./wordmark.png" alt="One Piece TCG" width="128" height="34"></a><span class="grow"></span>
       <a class="ic-btn ${cur === 'account' ? 'on' : ''}" href="#/account" aria-label="My account" title="My account">${signed ? avatarHtml('sm') : ICON.user}</a>
       <a class="ic-btn ${cur === 'cart' ? 'on' : ''}" href="#/cart" aria-label="View my cart" title="My cart">${ICON.cart}<span class="cart-n" id="cart-n" ${n ? '' : 'hidden'}>${n}</span></a>
     </div>
