@@ -1,12 +1,12 @@
 // "List all on Marketplace": one pop-up, one price and one quantity cap for every card in the collection.
-import { sb, state, esc, bnd, toast, rpc, loadMe, loadCatalog, loadInv, invStats, refBnd, catImg, sheet } from '../lib.js';
+import { fetchAll, sb, state, esc, bnd, toast, rpc, loadMe, loadCatalog, loadInv, invStats, refBnd, catImg, sheet } from '../lib.js';
 
 const yuyuPrice = (c) => (c.jpy ? Math.round(refBnd(c) * 2) / 2 || 0.5 : 0);   // Yuyutei price in BND, to the nearest 0.5 (same as "Use this price" on the sell page)
 
 export async function openListAll(refs = null) {   // refs = only these card versions (List selected); null = the whole collection
   const pick = refs ? new Set(refs) : null;
   await loadCatalog(); await loadInv(true);
-  const { data: mine } = await sb.from('listings').select('card_ref').eq('seller_id', state.user.id).in('status', ['active', 'reserved']).limit(5000);
+  const mine = await fetchAll(() => sb.from('listings').select('card_ref').eq('seller_id', state.user.id).in('status', ['active', 'reserved']).order('id'));
   const listed = new Map(); for (const l of mine || []) listed.set(l.card_ref, (listed.get(l.card_ref) || 0) + 1);
   const mineRows = invStats().rows.filter((r) => !pick || pick.has(r.c.ref));
   const rows = mineRows.map(({ c, q }) => ({ c, avail: Math.max(0, q - (listed.get(c.ref) || 0)), have: q })).filter((r) => r.avail > 0);

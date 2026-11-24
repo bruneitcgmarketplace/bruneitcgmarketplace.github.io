@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
+import { fetchAll, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
 import { openShareSheet } from './shared.js';
 import { openListAll } from './listall.js';
 import { cardFilter } from './exploreSets.js';
@@ -9,7 +9,7 @@ export async function viewInventory($app) {
   $app.innerHTML = `<div class="loading">Loading…</div>`;
   await loadInv(true);
   const listed = new Map();
-  const { data: mine } = await sb.from('listings').select('card_ref').eq('seller_id', state.user.id).in('status', ['active', 'reserved']);
+  const mine = await fetchAll(() => sb.from('listings').select('card_ref').eq('seller_id', state.user.id).in('status', ['active', 'reserved']).order('id'));
   for (const l of mine || []) listed.set(l.card_ref, (listed.get(l.card_ref) || 0) + 1);
 
   const f = JSON.parse(sessionStorage.getItem('invf') || '{"q":"","set":"","sort":"new"}');

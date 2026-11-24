@@ -1,5 +1,5 @@
 // Explore: One Piece sets with actual product photos and a full filter panel.
-import { sb, state, esc, bnd, loadCatalog, loadInv, refBnd, cardImg, sheet, ART, artShort } from '../lib.js';
+import { fetchAll, sb, state, esc, bnd, loadCatalog, loadInv, refBnd, cardImg, sheet, ART, artShort } from '../lib.js';
 
 // ---------- set icon (booster box) ----------
 const GROUPS = [
@@ -168,7 +168,7 @@ export async function viewExplore($app) {
   };
 
   async function ensureData() {
-    if (f.sale && !saleCodes) { const { data } = await sb.from('listings').select('card_code').eq('status', 'active').limit(2000); saleCodes = new Set((data || []).map((l) => l.card_code)); }
+    if (f.sale && !saleCodes) { const data = await fetchAll(() => sb.from('listings').select('card_code').eq('status', 'active').order('id')); saleCodes = new Set(data.map((l) => l.card_code)); }
     if (NEEDS_INFO(f)) await loadInfo();
   }
 

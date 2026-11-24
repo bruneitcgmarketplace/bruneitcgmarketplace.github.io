@@ -325,3 +325,15 @@ export function rateSheet(listingId, whom) {
     };
   });
 }
+
+// The database returns at most 1000 rows per request. Read every page of a query (make = () => a fresh query builder).
+export async function fetchAll(make, max = 20000) {
+  const out = [];
+  for (let from = 0; from < max; from += 1000) {
+    const { data, error } = await make().range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+    if ((data || []).length < 1000) break;
+  }
+  return out;
+}

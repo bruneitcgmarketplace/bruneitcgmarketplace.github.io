@@ -1,5 +1,6 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, rateSheet } from '../lib.js';
 import { cardFilter } from './exploreSets.js';
+import { fetchAll } from '../lib.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
@@ -81,7 +82,7 @@ export async function viewOrders($app, opts = {}) {
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
         ${pd ? (pd.changed ? `<div class="row tight" style="margin:.2rem 0"><span class="chip ${dcls}">${esc(fmtDelta(pd))} from listing price</span><span class="muted">Listing price ${bnd(pd.listing)}</span></div>` : '<div class="muted">Sold at the listing price</div>') : ''}
         <div class="muted">${role === 'sell' ? (l.buyer ? 'Buyer: ' + esc(l.buyer.display_name) : '') : 'Seller: ' + esc(l.seller?.display_name)} · ${l.status === 'sold' && l.sold_at ? 'Sold ' : ''}${new Date((l.status === 'sold' && l.sold_at) || l.created_at).toLocaleDateString()}</div>
-        ${extra}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
+        ${extra}${role === 'sell' && l.status === 'active' && l.type === 'buy_now' ? `<label class="usel"><input type="checkbox" data-sel="${(l._ids || [l.id]).join(',')}"> Select${l._ids?.length > 1 ? ` all ${l._ids.length}` : ''}</label>` : ''}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
   };
   const wire = (reload) => body.querySelectorAll('.order').forEach((el) => {
     const id = el.dataset.id;
@@ -111,12 +112,16 @@ export async function viewOrders($app, opts = {}) {
     body.innerHTML = `<h2>Active bids</h2>${bidding.length ? (await Promise.all(bidding.map((l) => card(l, 'buy')))).join('') : '<p class="muted">No active bids. <a href="#/market?type=auction">Browse auctions</a></p>'}
       <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${reportPanel('buy')}${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
   } else if (tab === 'selling') {
-    const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved', 'ended', 'cancelled']).order('created_at', { ascending: false }).limit(1000);
+    const [live, past] = await Promise.all([
+      fetchAll(() => sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved']).order('created_at', { ascending: false }).order('id')),
+      sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['ended', 'cancelled']).order('created_at', { ascending: false }).limit(15),
+    ]);
+    const data = [...live, ...(past.data || []).filter((l) => l.status === 'ended' || l.status === 'cancelled')];
     const g = (s) => (data || []).filter((l) => s.includes(l.status));
     // identical active Buy now listings (same card, condition, language, price) become one card with a quantity
     const combine = (arr) => { const m = new Map(), out = []; for (const l of arr) { if (l.type !== 'buy_now' || l.status !== 'active') { out.push(l); continue; } const k = [l.card_ref, l.condition, l.language, l.price].join('|'); const g = m.get(k); if (g) g._ids.push(l.id); else { const r = { ...l, _ids: [l.id] }; m.set(k, r); out.push(r); } } return out; };
     const sect = async (t, arr, empty) => `<h2>${t}</h2>${arr.length ? (await Promise.all(combine(arr).map((l) => card(l, 'sell')))).join('') : `<p class="muted">${empty}</p>`}`;
-    body.innerHTML = `${only ? '' : '<p><a class="btn" href="#/sell">+ New listing</a></p>'}${await sect('Needs settlement', g(['reserved']), 'None.')}<div style="height:.8rem"></div>${await sect('Active listings', g(['active']), 'No active listings.')}<div style="height:.8rem"></div>${await sect('Ended and cancelled', g(['ended', 'cancelled']).slice(0, 15), 'None.')}`;
+    body.innerHTML = `${only ? '' : '<p><a class="btn" href="#/sell">+ New listing</a></p>'}${await sect('Needs settlement', g(['reserved']), 'None.')}<div style="height:.8rem"></div>${g(['active']).some((l) => l.type === 'buy_now') ? '<div class="unl" id="unl"><button class="btn sec sm-btn" id="unsel" disabled>Unlist selected (0)</button><button class="btn sec sm-btn" id="unpick">Select all</button><button class="btn bad sm-btn" id="unall">Unlist all</button></div>' : ''}${await sect('Active listings', g(['active']), 'No active listings.')}<div style="height:.8rem"></div>${await sect('Ended and cancelled', g(['ended', 'cancelled']).slice(0, 15), 'None.')}`;
   } else {
     const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).eq('status', 'sold').order('created_at', { ascending: false }).limit(200);
     const rows = data || [], total = rows.reduce((a, l) => a + finalPrice(l), 0), listed = rows.reduce((a, l) => a + listingPrice(l), 0), net = Math.round((total - listed) * 100) / 100;
@@ -129,6 +134,19 @@ export async function viewOrders($app, opts = {}) {
     body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); };
   }
   wire(() => viewOrders($app, opts));
+  {
+    const boxes = () => [...body.querySelectorAll('input[data-sel]')];
+    const picked = () => boxes().filter((b) => b.checked).flatMap((b) => b.dataset.sel.split(','));
+    const upd = () => { const s = $app.querySelector('#unsel'); if (!s) return; const n = picked().length; s.textContent = `Unlist selected (${n})`; s.disabled = !n; s.className = 'btn sm-btn ' + (n ? 'bad' : 'sec'); const p = $app.querySelector('#unpick'); p.textContent = boxes().length && boxes().every((b) => b.checked) ? 'Clear' : 'Select all'; };
+    boxes().forEach((b) => (b.onchange = upd));
+    const run = guard(async (ids, label) => { const n = await rpc('cancel_my_listings', { p_ids: ids }); toast(`${n} listing${n === 1 ? '' : 's'} unlisted`); viewOrders($app, opts); });
+    const un = $app.querySelector('#unl');
+    if (un) {
+      $app.querySelector('#unpick').onclick = () => { const all = boxes().every((b) => b.checked); boxes().forEach((b) => (b.checked = !all)); upd(); };
+      $app.querySelector('#unsel').onclick = guard(async () => { const ids = picked(); if (!ids.length) return; if (!(await confirmSheet(`Unlist ${ids.length}?`, `${ids.length} listing${ids.length === 1 ? '' : 's'} will be removed from the Marketplace. Your collection is not changed.`, `Unlist ${ids.length}`, true))) return; await run(ids); });
+      $app.querySelector('#unall').onclick = guard(async () => { const n = boxes().flatMap((b) => b.dataset.sel.split(',')).length; if (!(await confirmSheet('Unlist everything?', `All ${n} of your active Buy now listings will be removed from the Marketplace. Your collection is not changed. Auctions with bids are not affected.`, 'Unlist all', true))) return; await run(null); });
+    }
+  }
   // Filters: hide the cards whose listing does not match (same sheet as Explore)
   const cf = cardFilter('ofx', state.cat, () => applyF());
   const refsOnPage = () => new Set([...body.querySelectorAll('.order')].map((o) => LST.get(o.dataset.id)?.card_ref).filter(Boolean));

@@ -23,6 +23,7 @@ await db.exec(readFileSync(new URL('../12_problem_reports.sql', import.meta.url)
 await db.exec(readFileSync(new URL('../09_agreed_price.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../14_ratings_tags.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../15_moderation.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../16_bulk_unlist.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -337,5 +338,14 @@ ok('new link differs after re-share', (await as(seller, `select share_inventory(
   ok('anonymised user cannot act', await fails(v2, `select inventory_adjust('op01-1', 1)`, [], 'banned'));
 }
 
+// --- bulk unlist
+{
+  const a = await lst(seller, { type: 'buy_now', price: 3 }), b = await lst(seller, { type: 'buy_now', price: 3 }), c = await lst(seller, { type: 'buy_now', price: 3 }), o = await lst(buyer2, { type: 'buy_now', price: 3 });
+  ok('unlist selected cancels only those', (await as(seller, `select cancel_my_listings($1::uuid[]) n`, [[a, b]])).rows[0].n === 2 && (await admin(`select status from listings where id = $1`, [c])).rows[0].status === 'active');
+  ok('cannot unlist someone else\'s listing', (await as(seller, `select cancel_my_listings($1::uuid[]) n`, [[o]])).rows[0].n === 0 && (await admin(`select status from listings where id = $1`, [o])).rows[0].status === 'active');
+  const before = (await admin(`select count(*)::int n from listings where seller_id = $1 and status = 'active'`, [seller])).rows[0].n;
+  ok('unlist all cancels all my active listings, not others\'', (await as(seller, `select cancel_my_listings(null) n`)).rows[0].n === before && (await admin(`select status from listings where id = $1`, [o])).rows[0].status === 'active');
+  ok('unlist needs sign-in', await fails(null, `select cancel_my_listings(null)`, [], 'Sign in'));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
