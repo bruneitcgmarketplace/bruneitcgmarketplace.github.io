@@ -1,4 +1,4 @@
-import { fetchAll, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
+import { fetchAll, rpc, sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
 import { openShareSheet } from './shared.js';
 import { openListAll } from './listall.js';
 import { cardFilter } from './exploreSets.js';
@@ -48,7 +48,7 @@ export async function viewInventory($app) {
     return `<div class="inv-row" data-ref="${esc(c.ref)}">
       <input type="checkbox" data-act="pick" aria-label="Select ${esc(c.code)}" ${sel.has(c.ref) ? 'checked' : ''} style="width:1.4rem;height:1.4rem;flex:none;margin:0 .45rem 0 0">
       <div class="img" data-act="zoom">${cardImg(c, 'sm')}</div>
-      <div class="grow"><div><b>${esc(c.code)}</b> ${esc(c.rarity)} ${artShort(c) ? '<span class="badge">' + esc(artShort(c)) + '</span>' : ''} ${l ? `<span class="badge bn">${l} listed</span>` : ''}</div>
+      <div class="grow"><div><b>${esc(c.code)}</b> ${esc(c.rarity)} ${artShort(c) ? '<span class="badge">' + esc(artShort(c)) + '</span>' : ''} ${l ? `<button class="badge bn lbtn" data-act="unlist" title="Unlist">${l} listed ✕</button>` : ''}</div>
         <div class="muted nm">${esc(c.name)}</div><div class="muted">${c.jpy ? bnd(refBnd(c)) + ' ea · ' + bnd(v) : 'No price'}</div></div>
       <div class="ctl"><div class="stepper"><button data-act="dec">−</button><b>${q}</b><button data-act="inc">+</button></div>
       <button class="btn sec sm-btn" data-act="sell">Sell</button></div></div>`;
@@ -84,6 +84,16 @@ export async function viewInventory($app) {
           await invAdjust(ref, -1); draw();
         }
         if (a === 'sell') location.hash = '#/sell/' + ref;
+        if (a === 'unlist') {
+          const ids = (await fetchAll(() => sb.from('listings').select('id').eq('seller_id', state.user.id).eq('card_ref', ref).eq('type', 'buy_now').eq('status', 'active').order('created_at').order('id'))).map((x) => x.id);
+          if (!ids.length) { toast('Nothing to unlist'); return viewInventory($app); }
+          const sh = sheet(`<h2>Unlist ${esc(c.code)}</h2><p class="muted">${ids.length} listed on the Marketplace. Enter how many to unlist, or leave empty to unlist all.</p><input type="number" inputmode="numeric" min="1" max="${ids.length}" id="uqn" placeholder="Qty (max ${ids.length})"><div class="row tight" style="margin-top:.6rem"><button class="btn bad" id="uqgo">Unlist</button></div>`);
+          sh.el.querySelector('#uqgo').onclick = guard(async () => {
+            const raw = sh.el.querySelector('#uqn').value.trim(); const q = raw === '' ? ids.length : Math.floor(Number(raw));
+            if (!(q >= 1) || q > ids.length) { toast(`Enter 1 to ${ids.length}`); return; }
+            const n = await rpc('cancel_my_listings', { p_ids: ids.slice(0, q) }); sh.close(); toast(`${n} unlisted`); viewInventory($app);
+          });
+        }
       })));
     });
   }

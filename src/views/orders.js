@@ -71,7 +71,7 @@ export async function viewOrders($app, opts = {}) {
     const dcls = pd?.changed ? (role === 'buy' ? (pd.delta < 0 ? 'ok' : 'bad') : (pd.delta < 0 ? 'warn' : 'ok')) : '';
     const acts = [];
     if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
-    if (role === 'sell' && l.status === 'active' && l.bid_count === 0) { if (l._ids?.length > 1) acts.push(['cancel', 'Cancel 1', 'bad'], ['cancelall', `Cancel all ${l._ids.length}`, 'bad']); else acts.push(['cancel', 'Cancel listing', 'bad']); }
+    if (role === 'sell' && l.status === 'active' && l.bid_count === 0) { if (l._ids?.length > 1) acts.push(['unlistqty', 'Unlist', 'bad']); else acts.push(['cancel', 'Cancel listing', 'bad']); }
     if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
     if (l.status === 'sold') acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
     if (l.status === 'sold' && l.buyer_id) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
@@ -82,7 +82,7 @@ export async function viewOrders($app, opts = {}) {
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
         ${pd ? (pd.changed ? `<div class="row tight" style="margin:.2rem 0"><span class="chip ${dcls}">${esc(fmtDelta(pd))} from listing price</span><span class="muted">Listing price ${bnd(pd.listing)}</span></div>` : '<div class="muted">Sold at the listing price</div>') : ''}
         <div class="muted">${role === 'sell' ? (l.buyer ? 'Buyer: ' + esc(l.buyer.display_name) : '') : 'Seller: ' + esc(l.seller?.display_name)} · ${l.status === 'sold' && l.sold_at ? 'Sold ' : ''}${new Date((l.status === 'sold' && l.sold_at) || l.created_at).toLocaleDateString()}</div>
-        ${extra}${role === 'sell' && l.status === 'active' && l.type === 'buy_now' ? `<label class="usel"><input type="checkbox" data-sel="${(l._ids || [l.id]).join(',')}"> Select${l._ids?.length > 1 ? ` all ${l._ids.length}` : ''}</label>` : ''}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
+        ${extra}${role === 'sell' && l.status === 'active' && l.type === 'buy_now' ? `<label class="usel"><input type="checkbox" data-sel="${(l._ids || [l.id]).join(',')}"> Select${l._ids?.length > 1 ? ` all ${l._ids.length}` : ''}</label>` : ''}${l._ids?.length > 1 && l.status === 'active' ? `<div class="row tight uq"><input type="number" inputmode="numeric" min="1" max="${l._ids.length}" placeholder="Qty (max ${l._ids.length})" data-uq="${l.id}" style="width:9.5rem"><span class="muted" style="font-size:.78rem">empty = all ${l._ids.length}</span></div>` : ''}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
   };
   const wire = (reload) => body.querySelectorAll('.order').forEach((el) => {
     const id = el.dataset.id;
@@ -94,7 +94,7 @@ export async function viewOrders($app, opts = {}) {
       if (a === 'receipt') { const { data: row } = await sb.from('listings').select(sel).eq('id', id).single(); downloadReceipt(receiptData(row, state.cat.byRef.get(row.card_ref)?.name || row.card_name)); return; }
       if (a === 'release') await rpc('seller_release', { p_listing: id, p_no_show: false });
       if (a === 'noshow') { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal. At 3 strikes they are blocked.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); }
-      if (a === 'cancelall') { const ids = LST.get(id)._ids || [id]; if (!(await confirmSheet(`Cancel all ${ids.length}?`, `All ${ids.length} identical listings will be removed.`, `Cancel ${ids.length}`, true))) return; let n = 0; for (const x of ids) { try { await rpc('cancel_listing', { p_listing: x }); n++; } catch { /* sold or taken meanwhile */ } } toast(`${n} cancelled`); reload(); return; }
+      if (a === 'unlistqty') { const all = LST.get(id)._ids || [id]; const inp = $app.querySelector(`input[data-uq="${id}"]`); const raw = (inp?.value || '').trim(); let q = raw === '' ? all.length : Math.floor(Number(raw)); if (!(q >= 1)) { toast('Enter a quantity of 1 or more'); return; } if (q > all.length) { toast(`Only ${all.length} listed`); return; } if (!(await confirmSheet(`Unlist ${q}?`, q === all.length ? `All ${q} identical listings will be removed from the Marketplace.` : `${q} of ${all.length} identical listings will be removed; ${all.length - q} stay on sale. Your collection is not changed.`, `Unlist ${q}`, true))) return; const n = await rpc('cancel_my_listings', { p_ids: all.slice(0, q) }); toast(`${n} unlisted`); reload(); return; }
       if (a === 'cancel') { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); }
       if (a === 'unreserve') await rpc('cancel_reservation', { p_listing: id });
       toast('Done'); reload();
