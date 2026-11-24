@@ -1,6 +1,11 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadMe, loadCatalog, loadInv, loadFx, isMember, needLogin, bindLogin, signOut, refBnd, PRICE } from '../lib.js';
 import { fmtBrunei } from '../home-content.js';
 
+// Install prompt (Chrome/Android). Captured early so the admin-only App panel can offer it.
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
+window.addEventListener('appinstalled', () => { installEvt = null; });
+
 export async function viewSettings($app) {
   const cat = await loadCatalog();
   const me = state.me, signed = !!state.user;
@@ -18,10 +23,12 @@ export async function viewSettings($app) {
       <label class="inline"><input type="checkbox" id="hd" ${localStorage.getItem('hd_images') !== '0' ? 'checked' : ''} style="width:auto"> Sharp card images (uses more mobile data)</label>
       <label>Manual rate override (BND per JPY, empty = automatic)</label><div class="row tight"><input id="fx" inputmode="decimal" value="${esc(localStorage.getItem('fx_manual') || '')}" style="max-width:160px"><button class="btn sec" id="fx-s">Apply</button></div></div>
     ${signed ? `<div class="panel"><h2>Data</h2><button class="btn sec" id="exp">Export inventory (CSV)</button></div>` : ''}
-    ${me?.is_admin ? `<div class="panel"><a class="btn sec" href="#/admin">Open admin</a></div>` : ''}
+    ${me?.is_admin ? `<div class="panel"><a class="btn sec" href="#/admin">Open admin</a></div>
+    <div class="panel"><h2>App (admin only)</h2>${window.matchMedia?.('(display-mode: standalone)').matches ? '<p class="muted">Already running as an installed app.</p>' : installEvt ? `<button class="btn" id="inst">Install app</button>` : `<p class="muted">Install: open the browser menu and choose "Install app" or "Add to Home screen" (iPhone: Share, then Add to Home Screen).</p>`}</div>` : ''}
     ${signed ? `<p><button class="btn sec" id="so">Sign out</button></p>` : ''}`;
   bindLogin($app);
   const $ = (s) => $app.querySelector(s);
+  const inst = $('#inst'); if (inst) inst.onclick = async () => { const e = installEvt; installEvt = null; await e.prompt(); viewSettings($app); };
   if (signed) {
     sb.from('profiles').select('display_name').eq('id', state.user.id).maybeSingle().then(({ data }) => { if ($('#dn') && data) $('#dn').value = data.display_name; });
     $('#dn-s').onclick = guard(async () => { const v = $('#dn').value.trim(); if (v.length < 2 || v.length > 40) throw new Error('Name must be 2 to 40 characters'); const { error } = await sb.from('profiles').update({ display_name: v }).eq('id', state.user.id); if (error) throw error; toast('Saved'); });
