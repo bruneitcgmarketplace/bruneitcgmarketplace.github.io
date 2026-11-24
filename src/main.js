@@ -33,13 +33,13 @@ setInterval(() => {
 const MENU = [
   ['home', '🏠', 'Home', '#/'],
   ['market', '🛒', 'Marketplace', '#/market'],
-  ['explore', '🧭', 'Explore', '#/explore'],
-  ['sell', '➕', 'Sell', '#/sell'],
+  ['mylistings', '🏷️', 'My listings', '#/mylistings'],
+  ['orders', '🧾', 'Orders', '#/orders'],
   ['inventory', '📦', 'My collection', '#/inventory'],
-  ['scan', '📷', 'Scan', '#/scan'],
+  ['explore', '🧭', 'Explore', '#/explore'],
 ];
-// My listings, Orders, Membership, Settings and Admin live under My account (top right), not in this bar
-const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore', mylistings: 'account', orders: 'account', membership: 'account', settings: 'account', admin: 'account', shared: 'inventory' }[page] || page || 'home');
+// Sell and Scan are not in this bar: Sell is on the My listings page and cards, Scan is on Home and My collection. Membership, Settings and Admin live under My account (top right)
+const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore', sell: 'mylistings', scan: 'inventory', membership: 'account', settings: 'account', admin: 'account', shared: 'inventory' }[page] || page || 'home');
 const ICON = {
   user: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
   cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.1l2-8H6.4"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
