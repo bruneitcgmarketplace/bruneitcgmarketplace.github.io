@@ -72,7 +72,7 @@ export async function viewSet($app, id) {
   const rarities = [...new Set(set.cards.map((c) => c.rarity))];
   const draw = () => {
     const inv = state.inv || new Map();
-    let cards = set.cards.filter((c) => (f.alt || c.def) && (!f.rar || c.rarity === f.rar)
+    let cards = set.cards.filter((c) => (!f.rar || c.rarity === f.rar)
       && (f.own === 'all' || (f.own === 'owned') === inv.has(c.ref)) && (!f.q || (c.code + ' ' + c.name + ' ' + c.jp).toLowerCase().includes(f.q.toLowerCase())));
     if (SORT[f.sort]) cards = cards.slice().sort(SORT[f.sort]);
     const ownedCodes = new Set([...inv.keys()].map((r) => cat.byRef.get(r)).filter((c) => c?.set === id).map((c) => c.code)).size;
@@ -80,15 +80,14 @@ export async function viewSet($app, id) {
       <div class="panel"><div class="row"><input id="q" placeholder="Search in set" value="${esc(f.q)}">
         <select id="sortc" aria-label="Sort by"><option value="code">↕ Card number</option><option value="phigh" ${f.sort === 'phigh' ? 'selected' : ''}>↕ Price high to low</option><option value="plow" ${f.sort === 'plow' ? 'selected' : ''}>↕ Price low to high</option><option value="name" ${f.sort === 'name' ? 'selected' : ''}>↕ Name A to Z</option></select>
         <select id="rar"><option value="">All rarities</option>${rarities.map((r) => `<option ${f.rar === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
-        ${state.user ? `<select id="own"><option value="all">All cards</option><option value="owned" ${f.own === 'owned' ? 'selected' : ''}>Owned</option><option value="missing" ${f.own === 'missing' ? 'selected' : ''}>Missing</option></select>` : ''}</div>
-        <label class="inline"><input type="checkbox" id="alt" ${f.alt ? 'checked' : ''} style="width:auto"> Show alternate arts</label></div>
+        ${state.user ? `<select id="own"><option value="all">All cards</option><option value="owned" ${f.own === 'owned' ? 'selected' : ''}>Owned</option><option value="missing" ${f.own === 'missing' ? 'selected' : ''}>Missing</option></select>` : ''}</div></div>
       <div class="grid">${cards.map((c) => { const fs = forSale.get(c.code), q = inv.get(c.ref);
         return `<a class="tile ${state.user && !q ? 'dim' : ''}" href="#/card/${esc(c.code)}">${cardImg(c)}<div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity)}${q ? ` · ×${q}` : ''}</div><div class="nm">${esc(c.name)}</div>
         <div class="muted">${c.jpy ? 'Ref ' + bnd(refBnd(c)) : ''}</div>${fs ? `<span class="badge bn">${fs.n} for sale from ${bnd(fs.min)}</span>` : ''}</div></a>`; }).join('')}</div>`;
     const $ = (s) => $app.querySelector(s);
-    const upd = () => { f.q = $('#q').value; f.rar = $('#rar').value; f.alt = $('#alt').checked; f.sort = $('#sortc').value; if ($('#own')) f.own = $('#own').value; sessionStorage.setItem('setf', JSON.stringify(f)); };
+    const upd = () => { f.q = $('#q').value; f.rar = $('#rar').value; f.sort = $('#sortc').value; if ($('#own')) f.own = $('#own').value; sessionStorage.setItem('setf', JSON.stringify(f)); };
     $('#q').oninput = () => { upd(); clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); };
-    $('#rar').onchange = () => { upd(); draw(); }; $('#sortc').onchange = () => { upd(); draw(); }; $('#alt').onchange = () => { upd(); draw(); }; if ($('#own')) $('#own').onchange = () => { upd(); draw(); };
+    $('#rar').onchange = () => { upd(); draw(); }; $('#sortc').onchange = () => { upd(); draw(); }; if ($('#own')) $('#own').onchange = () => { upd(); draw(); };
   };
   draw();
 }
@@ -104,7 +103,7 @@ export async function viewCard($app, code) {
   const inv = state.inv || new Map();
   $app.innerHTML = `<p><a href="#/set/${main.set}">← ${esc(setName(main.set))}</a></p>
     <div class="detail"><div><img class="main" id="mainimg" src="${esc(catImg(main))}" alt="${esc(main.code)}" onerror="this.style.visibility='hidden'">
-      ${variants.length > 1 ? `<div class="thumbs">${variants.map((v) => `<img data-ref="${esc(v.ref)}" src="${esc(catImg(v, '100_140'))}" title="${esc(v.rarity)}${v.art && v.art !== "std" ? " · " + esc(ART[v.art][1]) : ""}" class="${v.ref === main.ref ? 'on' : ''}">`).join('')}</div>` : ''}</div>
+      ${variants.length > 1 ? `<div class="thumbs">${variants.map((v) => `<img data-ref="${esc(v.ref)}" src="${esc(catImg(v, '100_140'))}" title="${esc(v.rarity)}${v.art && v.art !== "std" ? " · " + esc(ART[v.art][1]) : ""}" class="${v.ref === main.ref ? 'on' : ''}">`).join('')}</div>` : ''}<p class="muted" id="ysrc" style="word-break:break-all;margin:.5rem 0 0"></p></div>
     <div><h1>${esc(main.name)}</h1><p class="muted">${esc(code)} · ${colorDot(main.color)} ${esc(main.color || '')} ${esc(main.type || '')}</p>
       ${main.jp ? `<p class="muted">${esc(main.jp)}</p>` : ''}
       <div class="panel" id="vinfo"></div>
@@ -114,6 +113,8 @@ export async function viewCard($app, code) {
   let cur = main;
   const show = (v) => {
     cur = v;
+    const yu = yuyuCard(v.set, v.num);
+    $app.querySelector('#ysrc').innerHTML = `Source: <a href="${esc(yu)}" target="_blank" rel="noopener">${esc(yu.replace('https://', ''))} ↗</a><br><span class="muted">If the photo is missing here, open this page on Yuyutei.</span>`;
     const mi = $app.querySelector('#mainimg'); mi.src = catImg(v); sharpen(mi, catImg(v, 'front'));
     $app.querySelectorAll('.thumbs img').forEach((i) => i.classList.toggle('on', i.dataset.ref === v.ref));
     $app.querySelector('#vinfo').innerHTML = `<b>${esc(v.rarity)}</b> ${v.art && v.art !== 'std' ? '· ' + ART[v.art][0] : ''}<br><span class="price">${v.jpy ? bnd(refBnd(v)) : 'No price'}</span> <span class="muted">reference${v.jpy ? ` (¥${v.jpy.toLocaleString()} <a href="${esc(yuyuCard(v.set, v.num))}" target="_blank" rel="noopener">Yuyutei ↗</a>)` : ''}</span>${state.user ? `<br>You own: <b>${inv.get(v.ref) || 0}</b>` : ''}`;
