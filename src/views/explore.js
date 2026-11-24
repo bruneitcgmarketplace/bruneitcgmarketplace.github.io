@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard, primeMeta } from '../lib.js';
 import { fallbackNote } from '../fallback.js';
 import { filterSheet, FRESH, activeCount, matchSync, needsInfo, loadInfo } from './exploreSets.js';
 
@@ -26,7 +26,7 @@ export async function viewMarket($app, setUnsub) {
   const setTab = (pref) => {
     $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));
     const s = $app.querySelector('#sort');
-    s.innerHTML = (type === 'auction' ? '<option value="end">Ending soon</option>' : '') + '<option value="new">Newest</option><option value="low">Price low</option><option value="high">Price high</option>';
+    s.innerHTML = (type === 'auction' ? '<option value="end">Ending soon</option>' : '') + '<option value="new">Newest</option><option value="low">Price low</option><option value="high">Price high</option><option value="rating">Top rated sellers</option>';
     s.value = [...s.options].some((o) => o.value === pref) ? pref : (type === 'auction' ? 'end' : 'new');
   };
   setTab(f.sort);
@@ -53,6 +53,7 @@ export async function viewMarket($app, setUnsub) {
     if (activeCount(mf)) { const ok = matchRefs(rows); rows = rows.filter((l) => ok.has(l.card_ref)); }
     rows = [...rows];
     if (sort === 'low') rows.sort((a, b) => listingPrice(a) - listingPrice(b)); else if (sort === 'high') rows.sort((a, b) => listingPrice(b) - listingPrice(a));
+    else if (sort === 'rating') { const sc = (l) => { const m = state.umeta.get(l.seller_id); return m && m.n ? m.avg + Math.min(m.n, 20) / 100 : -1; }; rows.sort((a, b) => sc(b) - sc(a)); }   // best average first, more reviews break ties
     rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
     const more = rows.length > 200; rows = rows.slice(0, 200);
     el.innerHTML = rows.length ? rows.map(tile).join('') + (more ? '<p class="muted" style="grid-column:1/-1">Showing the first 200. Narrow the filters to see the rest.</p>' : '')
@@ -79,6 +80,7 @@ export async function viewMarket($app, setUnsub) {
     const el = $app.querySelector('#list'); if (!el) return;
     if (error) return (el.innerHTML = `<div class="notice err">${esc(error.message)}</div>`);
     pool = [...data];
+    await primeMeta(pool);
     fillSellers();
     await ensureData();
     paint();
@@ -143,7 +145,8 @@ export async function viewCard($app, code) {
   if (!variants) { $app.innerHTML = '<div class="notice err">Unknown card</div>'; return; }
   if (state.user) await loadInv();
   const main = variants.find((c) => c.def) || variants[0];
-  const { data: ls } = await sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').eq('card_code', code).order('created_at', { ascending: false });
+  const { data: ls } = await sb.from('listings').select('*, seller:profiles!listings_seller_id_fkey(display_name)').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').eq('card_code', code).order('created_at', { ascending: false });
+  await primeMeta(ls);
   const inv = state.inv || new Map();
   $app.innerHTML = `<p><a href="#/set/${main.set}">← ${esc(setName(main.set))}</a></p>
     <div class="detail"><div><img class="main" id="mainimg" src="${esc(catImg(main))}" alt="${esc(main.code)}" onerror="this.style.visibility='hidden'">

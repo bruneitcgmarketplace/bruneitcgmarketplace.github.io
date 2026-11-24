@@ -7,7 +7,7 @@ export const PRICE = import.meta.env.VITE_MEMBER_PRICE || '5';
 export const configured = !!(URL_ && KEY);
 export const sb = configured ? createClient(URL_, KEY) : null;
 
-export const state = { user: null, me: null, avatar: null, cat: null, inv: null, fx: 0.0085, fxSrc: 'default' };
+export const state = { user: null, me: null, avatar: null, cat: null, inv: null, fx: 0.0085, fxSrc: 'default', umeta: new Map() };
 
 // ---------- small helpers ----------
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -215,6 +215,18 @@ export function invStats() {
 // ---------- listings ----------
 export const listingPrice = (l) => (l.type === 'auction' ? Number(l.current_bid ?? l.start_price) : Number(l.price));
 export const listingImg = (l) => l.photos?.[0] || upImg(l.catalog_image, '250_350') || '';
+// seller name, tag icons and star rating under a listing tile (needs primeMeta() to have run for these sellers)
+const TAG_ICON = { verified: '✔', moderator: '🛡', trusted: '🏅', vip: '💎' };
+function sellerLine(l) {
+  const m = state.umeta.get(l.seller_id); if (!m) return '';
+  const icons = Object.keys(TAG_ICON).filter((k) => m.tags.includes(k)).map((k) => `<span title="${esc(TAGS[k])}">${TAG_ICON[k]}</span>`).join('');
+  return `<div class="sline"><span class="sn">${esc(l.seller?.display_name || 'Seller')}</span>${icons ? ` <span class="si">${icons}</span>` : ''} ${m.n ? `<span class="stars">★ ${m.avg.toFixed(1)}</span><span class="muted">(${m.n})</span>` : '<span class="muted">New</span>'}</div>`;
+}
+export async function primeMeta(rows) {
+  const ids = [...new Set((rows || []).map((l) => l.seller_id).filter((i) => i && !state.umeta.has(i)))];
+  if (!ids.length) return;
+  try { for (const [k, v] of await userMeta(ids)) state.umeta.set(k, v); } catch { /* tiles just show without ratings */ }
+}
 export function tile(l) {
   const ref = state.cat?.byRef.get(l.card_ref);
   const r = ref ? refBnd(ref) : 0, p = listingPrice(l);
@@ -226,6 +238,7 @@ export function tile(l) {
     <div class="b"><div class="code">${esc(l.card_code)} · ${esc(l.rarity || '')} · ${esc(l.condition)}</div>
     <div class="nm">${esc(ref?.name || l.card_name)}</div>
     <div class="row tight between"><span class="price">${bnd(p)}</span><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span></div>
+    ${sellerLine(l)}
     ${l.type === 'auction' ? `<div class="muted">${l.bid_count} bids · ${timerHtml(l.ends_at)}</div>` : held ? `<div class="holdnote"><b>On hold.</b> Another buyer is completing this purchase.</div>` : deal}</div></a>`;
 }
 
