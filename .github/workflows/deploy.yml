@@ -19,7 +19,7 @@ jobs:
       - name: Refresh official news, release dates and Yuyutei cards
         run: node tools/refresh_home_feed.mjs
         env:
-          HOME_FEED_PREVIOUS_URL: https://bruneitcgmarketplace.github.io/home-feed.json
+          HOME_FEED_PREVIOUS_URL: https://optcgmarketplace.github.io/home-feed.json
       - name: Refresh Yuyutei card prices (keeps the committed catalogue if the source fails)
         run: node tools/refresh_catalog.mjs
         env:

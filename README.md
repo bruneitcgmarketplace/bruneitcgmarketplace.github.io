@@ -2,7 +2,7 @@
 
 PWA marketplace for the Brunei One Piece Card Game community. Google login, Buy-now and Auction listings, personal inventory with reference prices, and a card catalogue. Free users sell Buy-now and buy/bid. Paid members (BND 5/month) can also sell by auction. No payments are processed on the site: buyer and seller settle on WhatsApp.
 
-Live: https://bruneitcgmarketplace.github.io/ · Stack: Vite + vanilla JS (static front end) and Supabase (Postgres, Google auth, realtime, storage).
+Live: https://optcgmarketplace.github.io/ · Stack: Vite + vanilla JS (static front end) and Supabase (Postgres, Google auth, realtime, storage).
 
 ## Screens (bottom tabs, ideas taken from the OPTCG.BN Android app)
 
