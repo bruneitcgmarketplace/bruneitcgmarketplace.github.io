@@ -80,6 +80,49 @@ function apply(f, cards, inv, saleCodes, det) {
 const GRP_ORDER = { op: 3, eb: 2, prb: 1, st: 0 };
 const setKeyOf = (id) => (GRP_ORDER[groupOf(id)] ?? 0) * 1000 + numOf(id);
 
+// ---- shared with the Marketplace tabs ----
+export { FRESH, activeCount };
+export const needsInfo = NEEDS_INFO;
+export const matchSync = (f, cards, inv) => apply(f, cards, inv, new Set(), NEEDS_INFO(f) ? info : null).list;
+
+export function filterSheet({ f, cat, ensureData, count, done, market = false, unit = 'card' }) {
+  const sh = sheet('<div id="fpanel"></div>'); const root = sh.el.querySelector('#fpanel');
+  const chipRow = (key, items, multi = true) => items.map(([v, l, colour]) => `<button type="button" class="fc ${(multi ? f[key].includes(v) : f[key] === v) ? 'on' : ''}" data-k="${key}" data-v="${esc(v)}" ${colour ? `style="--cc:${colour}"` : ''}>${esc(l ?? v)}</button>`).join('');
+  const render = async () => {
+    await ensureData();
+    const preview = count();
+    const traits = info ? [...new Set(Object.values(info).flatMap((d) => (d[5] || '').split('/').map((t) => t.trim()).filter(Boolean)))].sort() : [];
+    root.innerHTML = `<h2>Filters</h2>
+      <div class="fsec"><h3>Set type</h3><div class="fcs">${chipRow('groups', GROUPS.map((g) => [g[0], g[1]]))}</div></div>
+      <div class="fsec"><h3>Set</h3><div class="fcs scrollx">${cat.sets.slice().sort((a, b) => setKeyOf(b.id) - setKeyOf(a.id)).map((s) => `<button type="button" class="fc ${f.sets.includes(s.id) ? 'on' : ''}" data-k="sets" data-v="${s.id}" title="${esc(s.name)}">${s.id.toUpperCase()}</button>`).join('')}</div></div>
+      <div class="fsec"><h3>Rarity</h3><div class="fcs">${chipRow('rar', RARITIES.map(([v, l]) => [v, v === '-' ? 'DON!!' : `${v}`]))}</div><div class="muted">L leader · C common · UC uncommon · R rare · SR super rare · SEC secret · SP special · TR treasure · P-… alternate art · DON!! cards</div></div>
+      <div class="fsec"><h3>Colour</h3><div class="fcs">${chipRow('col', COLOURS.map(([n, c]) => [n, n, c]))}</div><label class="inline"><input type="checkbox" id="colAll" ${f.colAll ? 'checked' : ''} style="width:auto"> Must have all selected colours (multicolour cards)</label></div>
+      <div class="fsec"><h3>Card type</h3><div class="fcs">${chipRow('type', TYPES.map((t) => [t, t]))}</div></div>
+      <div class="fsec"><h3>Art type</h3><div class="fcs">${chipRow('arts', Object.entries(ART).map(([k, v]) => [k, v[0]]))}</div><div class="muted">Manga = Japanese Super Parallel (Yuyutei label). Alternate art = other parallels. Foil = lame, pirate flag and stamped foils.</div></div>
+      <div class="fsec"><h3>Reference price (BND)</h3><div class="row tight"><input type="number" id="pmin" min="0" step="0.5" placeholder="Min" value="${esc(f.pmin)}" style="max-width:110px"><span>to</span><input type="number" id="pmax" min="0" step="0.5" placeholder="Max" value="${esc(f.pmax)}" style="max-width:110px"></div></div>
+      <div class="fsec"><h3>Cost</h3><div class="row tight"><input type="number" id="cmin" min="0" max="10" placeholder="Min" value="${esc(f.cmin)}" style="max-width:110px"><span>to</span><input type="number" id="cmax" min="0" max="10" placeholder="Max" value="${esc(f.cmax)}" style="max-width:110px"></div></div>
+      <div class="fsec"><h3>Power</h3><div class="row tight"><input type="number" id="wmin" min="0" step="1000" placeholder="Min" value="${esc(f.wmin)}" style="max-width:110px"><span>to</span><input type="number" id="wmax" min="0" step="1000" placeholder="Max" value="${esc(f.wmax)}" style="max-width:110px"></div></div>
+      <div class="fsec"><h3>Counter</h3><div class="fcs">${chipRow('counter', [['0', 'None'], ['1000', '+1000'], ['2000', '+2000']])}</div></div>
+      <div class="fsec"><h3>Life (leaders)</h3><div class="fcs">${chipRow('life', [['3', '3'], ['4', '4'], ['5', '5']])}</div></div>
+      <div class="fsec"><h3>Attribute</h3><div class="fcs">${chipRow('attr', ATTRS.map((a) => [a, a]))}</div></div>
+      <div class="fsec"><h3>Trait / type</h3><input id="trait" list="traitlist" placeholder="e.g. Straw Hat Crew, Supernovas" value="${esc(f.trait)}"><datalist id="traitlist">${traits.map((t) => `<option value="${esc(t)}">`).join('')}</datalist></div>
+      <div class="fsec"><h3>Effect keywords</h3><div class="fcs">${chipRow('kw', KEYWORDS.map((k) => [k, k]))}</div></div>
+      ${state.user ? `<div class="fsec"><h3>My collection</h3><div class="fcs">${chipRow('own', [['all', 'All cards'], ['owned', 'Owned'], ['missing', 'Missing']], false)}</div></div>` : ''}
+      ${market ? '' : `<div class="fsec"><h3>Marketplace</h3><label class="inline"><input type="checkbox" id="sale" ${f.sale ? 'checked' : ''} style="width:auto"> Only cards for sale now</label></div>`}
+      <div class="fbar"><button class="btn sec" id="freset">Reset</button><button class="btn grow" id="fgo">Show ${preview} ${unit}${preview === 1 ? '' : 's'}</button></div>`;
+    root.querySelectorAll('.fc').forEach((b) => (b.onclick = () => {
+      const k = b.dataset.k, v = b.dataset.v;
+      if (Array.isArray(f[k])) { f[k] = f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v]; } else f[k] = v;
+      if (k === 'own' && f.own !== 'all' && !state.inv) loadInv(); render();
+    }));
+    const bind = (id, key, isCheck) => { const el = root.querySelector('#' + id); if (!el) return; el.onchange = () => { f[key] = isCheck ? el.checked : el.value; render(); }; };
+    ['pmin', 'pmax', 'cmin', 'cmax', 'wmin', 'wmax', 'trait'].forEach((k) => bind(k, k)); bind('colAll', 'colAll', true); bind('sale', 'sale', true); bind('sort', 'sort');
+    root.querySelector('#freset').onclick = () => { Object.assign(f, FRESH(), { q: f.q }); render(); };
+    root.querySelector('#fgo').onclick = () => { sh.close(); done(); };
+  };
+  render();
+}
+
 export async function viewExplore($app) {
   const cat = await loadCatalog();
   if (state.user) await loadInv();
@@ -148,41 +191,8 @@ export async function viewExplore($app) {
   };
 
   function openFilters() {
-    const sh = sheet('<div id="fpanel"></div>'); const root = sh.el.querySelector('#fpanel');
-    const chipRow = (key, items, multi = true) => items.map(([v, l, colour]) => `<button type="button" class="fc ${(multi ? f[key].includes(v) : f[key] === v) ? 'on' : ''}" data-k="${key}" data-v="${esc(v)}" ${colour ? `style="--cc:${colour}"` : ''}>${esc(l ?? v)}</button>`).join('');
-    const render = async () => {
-      await ensureData();
-      const preview = apply(f, cat.cards, inv, saleCodes || new Set(), NEEDS_INFO(f) ? info : null).list.length;
-      const traits = info ? [...new Set(Object.values(info).flatMap((d) => (d[5] || '').split('/').map((t) => t.trim()).filter(Boolean)))].sort() : [];
-      root.innerHTML = `<h2>Filters</h2>
-        <div class="fsec"><h3>Set type</h3><div class="fcs">${chipRow('groups', GROUPS.map((g) => [g[0], g[1]]))}</div></div>
-        <div class="fsec"><h3>Set</h3><div class="fcs scrollx">${cat.sets.slice().sort((a, b) => setKeyOf(b.id) - setKeyOf(a.id)).map((s) => `<button type="button" class="fc ${f.sets.includes(s.id) ? 'on' : ''}" data-k="sets" data-v="${s.id}" title="${esc(s.name)}">${s.id.toUpperCase()}</button>`).join('')}</div></div>
-        <div class="fsec"><h3>Rarity</h3><div class="fcs">${chipRow('rar', RARITIES.map(([v, l]) => [v, v === '-' ? 'DON!!' : `${v}`]))}</div><div class="muted">L leader · C common · UC uncommon · R rare · SR super rare · SEC secret · SP special · TR treasure · P-… alternate art · DON!! cards</div></div>
-        <div class="fsec"><h3>Colour</h3><div class="fcs">${chipRow('col', COLOURS.map(([n, c]) => [n, n, c]))}</div><label class="inline"><input type="checkbox" id="colAll" ${f.colAll ? 'checked' : ''} style="width:auto"> Must have all selected colours (multicolour cards)</label></div>
-        <div class="fsec"><h3>Card type</h3><div class="fcs">${chipRow('type', TYPES.map((t) => [t, t]))}</div></div>
-        <div class="fsec"><h3>Art type</h3><div class="fcs">${chipRow('arts', Object.entries(ART).map(([k, v]) => [k, v[0]]))}</div><div class="muted">Manga = Japanese Super Parallel (Yuyutei label). Alternate art = other parallels. Foil = lame, pirate flag and stamped foils.</div></div>
-        <div class="fsec"><h3>Reference price (BND)</h3><div class="row tight"><input type="number" id="pmin" min="0" step="0.5" placeholder="Min" value="${esc(f.pmin)}" style="max-width:110px"><span>to</span><input type="number" id="pmax" min="0" step="0.5" placeholder="Max" value="${esc(f.pmax)}" style="max-width:110px"></div></div>
-        <div class="fsec"><h3>Cost</h3><div class="row tight"><input type="number" id="cmin" min="0" max="10" placeholder="Min" value="${esc(f.cmin)}" style="max-width:110px"><span>to</span><input type="number" id="cmax" min="0" max="10" placeholder="Max" value="${esc(f.cmax)}" style="max-width:110px"></div></div>
-        <div class="fsec"><h3>Power</h3><div class="row tight"><input type="number" id="wmin" min="0" step="1000" placeholder="Min" value="${esc(f.wmin)}" style="max-width:110px"><span>to</span><input type="number" id="wmax" min="0" step="1000" placeholder="Max" value="${esc(f.wmax)}" style="max-width:110px"></div></div>
-        <div class="fsec"><h3>Counter</h3><div class="fcs">${chipRow('counter', [['0', 'None'], ['1000', '+1000'], ['2000', '+2000']])}</div></div>
-        <div class="fsec"><h3>Life (leaders)</h3><div class="fcs">${chipRow('life', [['3', '3'], ['4', '4'], ['5', '5']])}</div></div>
-        <div class="fsec"><h3>Attribute</h3><div class="fcs">${chipRow('attr', ATTRS.map((a) => [a, a]))}</div></div>
-        <div class="fsec"><h3>Trait / type</h3><input id="trait" list="traitlist" placeholder="e.g. Straw Hat Crew, Supernovas" value="${esc(f.trait)}"><datalist id="traitlist">${traits.map((t) => `<option value="${esc(t)}">`).join('')}</datalist></div>
-        <div class="fsec"><h3>Effect keywords</h3><div class="fcs">${chipRow('kw', KEYWORDS.map((k) => [k, k]))}</div></div>
-        ${state.user ? `<div class="fsec"><h3>My collection</h3><div class="fcs">${chipRow('own', [['all', 'All cards'], ['owned', 'Owned'], ['missing', 'Missing']], false)}</div></div>` : ''}
-        <div class="fsec"><h3>Marketplace</h3><label class="inline"><input type="checkbox" id="sale" ${f.sale ? 'checked' : ''} style="width:auto"> Only cards for sale now</label></div>
-        <div class="fbar"><button class="btn sec" id="freset">Reset</button><button class="btn grow" id="fgo">Show ${preview} card${preview === 1 ? '' : 's'}</button></div>`;
-      root.querySelectorAll('.fc').forEach((b) => (b.onclick = () => {
-        const k = b.dataset.k, v = b.dataset.v;
-        if (Array.isArray(f[k])) { f[k] = f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v]; } else f[k] = v;
-        if (k === 'own' && f.own !== 'all' && !state.inv) loadInv(); render();
-      }));
-      const bind = (id, key, isCheck) => { const el = root.querySelector('#' + id); if (!el) return; el.onchange = () => { f[key] = isCheck ? el.checked : el.value; render(); }; };
-      ['pmin', 'pmax', 'cmin', 'cmax', 'wmin', 'wmax', 'trait'].forEach((k) => bind(k, k)); bind('colAll', 'colAll', true); bind('sale', 'sale', true); bind('sort', 'sort');
-      root.querySelector('#freset').onclick = () => { Object.assign(f, FRESH(), { q: f.q }); render(); };
-      root.querySelector('#fgo').onclick = () => { sh.close(); shown = 60; draw(); };
-    };
-    render();
+    filterSheet({ f, cat, ensureData, done: () => { shown = 60; draw(); },
+      count: () => apply(f, cat.cards, inv, saleCodes || new Set(), NEEDS_INFO(f) ? info : null).list.length });
   }
   await draw();
 }

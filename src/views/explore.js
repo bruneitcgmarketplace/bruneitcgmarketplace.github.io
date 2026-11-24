@@ -1,5 +1,6 @@
 import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard } from '../lib.js';
 import { fallbackNote } from '../fallback.js';
+import { filterSheet, FRESH, activeCount, matchSync, needsInfo, loadInfo } from './exploreSets.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
 
@@ -10,11 +11,15 @@ export async function viewMarket($app, setUnsub) {
   const p = qs();
   const f = JSON.parse(sessionStorage.getItem('filters') || '{}');
   let type = (p.get('type') ?? f.type) === 'auction' ? 'auction' : 'buy_now';   // two sub pages, no "All"
+  if (state.user) await loadInv();
+  const inv = state.inv || new Map();
+  const mf = Object.assign(FRESH(), JSON.parse(sessionStorage.getItem('mf') || '{}'), { q: '', sale: false });   // same filters as Explore
+  let pool = [];   // listings of the current tab, before filters
   $app.innerHTML = `<h1>Marketplace</h1><p class="muted">Cards for sale by collectors in Brunei. Buy now or bid in auctions.</p>
     <div class="seg" id="mt"><a data-t="buy_now">Buy now</a><a data-t="auction">Auction</a></div>
     <div class="panel"><div class="row">
       <input id="q" placeholder="Search card code or name, e.g. OP01-001" value="${esc(f.q || '')}">
-      <select id="sort"></select></div></div>
+      <select id="sort"></select><button class="btn sec" id="fbtn">⚙ Filters</button></div></div>
     <div id="list" class="grid"><p class="muted">Loading…</p></div>`;
   const setTab = (pref) => {
     $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));
@@ -23,11 +28,32 @@ export async function viewMarket($app, setUnsub) {
     s.value = [...s.options].some((o) => o.value === pref) ? pref : (type === 'auction' ? 'end' : 'new');
   };
   setTab(f.sort);
+  const fbtn = $app.querySelector('#fbtn');
+  const btnLabel = () => { const n = activeCount(mf); fbtn.className = 'btn ' + (n ? '' : 'sec'); fbtn.textContent = '⚙ Filters' + (n ? ` (${n})` : ''); };
+  btnLabel();
+  const ensureData = async () => { if (needsInfo(mf)) await loadInfo(); };
+  const matchRefs = (rows) => { const cards = [...new Map(rows.map((l) => [l.card_ref, cat.byRef.get(l.card_ref)]).filter(([, c]) => c)).values()]; return new Set(matchSync(mf, cards, inv).map((c) => c.ref)); };
+  function paint() {
+    const el = $app.querySelector('#list'); if (!el) return;
+    const sort = $app.querySelector('#sort').value;
+    let rows = pool;
+    if (activeCount(mf)) { const ok = matchRefs(rows); rows = rows.filter((l) => ok.has(l.card_ref)); }
+    rows = [...rows];
+    if (sort === 'low') rows.sort((a, b) => listingPrice(a) - listingPrice(b)); else if (sort === 'high') rows.sort((a, b) => listingPrice(b) - listingPrice(a));
+    rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
+    const more = rows.length > 200; rows = rows.slice(0, 200);
+    el.innerHTML = rows.length ? rows.map(tile).join('') + (more ? '<p class="muted" style="grid-column:1/-1">Showing the first 200. Narrow the filters to see the rest.</p>' : '')
+      : `<p class="muted">${activeCount(mf) ? 'Nothing matches these filters.' : type === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} ${activeCount(mf) ? '<a href="#" id="fclr">Clear filters</a>' : '<a href="#/sell">Sell a card</a>'}</p>`;
+    const c = el.querySelector('#fclr'); if (c) c.onclick = (ev) => { ev.preventDefault(); Object.assign(mf, FRESH(), { q: '' }); sessionStorage.setItem('mf', JSON.stringify(mf)); btnLabel(); paint(); };
+  }
+  fbtn.onclick = () => filterSheet({ f: mf, cat, ensureData, market: true, unit: 'listing',
+    count: () => { if (!activeCount(mf)) return pool.length; const ok = matchRefs(pool); return pool.filter((l) => ok.has(l.card_ref)).length; },
+    done: () => { sessionStorage.setItem('mf', JSON.stringify(mf)); btnLabel(); paint(); } });
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;
     sessionStorage.setItem('filters', JSON.stringify({ q, type: t, sort }));
-    let req = sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').limit(120);
+    let req = sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').limit(1000);
     req = req.eq('type', t);
     if (q) {
       const s = q.replace(/[%,()]/g, ' ');
@@ -39,10 +65,9 @@ export async function viewMarket($app, setUnsub) {
     const { data, error } = await req;
     const el = $app.querySelector('#list'); if (!el) return;
     if (error) return (el.innerHTML = `<div class="notice err">${esc(error.message)}</div>`);
-    const rows = [...data];
-    if (sort === 'low') rows.sort((a, b) => listingPrice(a) - listingPrice(b)); else if (sort === 'high') rows.sort((a, b) => listingPrice(b) - listingPrice(a));
-    rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
-    el.innerHTML = rows.length ? rows.map(tile).join('') : `<p class="muted">${t === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} <a href="#/sell">Sell a card</a></p>`;
+    pool = [...data];
+    await ensureData();
+    paint();
   };
   let t; $app.querySelector('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 300); });
   $app.querySelector('#sort').onchange = load;
