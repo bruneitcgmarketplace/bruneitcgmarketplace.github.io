@@ -287,3 +287,12 @@ img.xs.ph { width:36px; height:50px; border-radius:4px; object-fit:cover; flex:0
 .inv-row .sm-btn{padding:.2rem .7rem;font-size:.78rem}
 .invact{display:grid;grid-template-columns:auto 1fr auto;gap:.4rem;margin:.2rem 0 .6rem}
 .invact .btn{padding:.35rem .7rem;font-size:.82rem;min-height:0;white-space:nowrap}
+
+/* ratings and tags */
+.stars{color:#f5a623;font-weight:700;letter-spacing:.05em}.stars .off{color:var(--line)}
+.utag{display:inline-block;font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.utag.t-verified{background:#e3f6ec;color:#116b3a;border-color:#9fd9b8}.utag.t-moderator{background:#e8edff;color:#27358f;border-color:#b3c0f5}
+.utag.t-trusted{background:#fff4d6;color:#7a5200;border-color:#f0d27f}.utag.t-vip{background:#f6e6ff;color:#6a2a96;border-color:#d8b4f0}
+.starpick{display:flex;gap:.25rem;margin:.4rem 0}.starpick button{font-size:2rem;line-height:1;background:none;border:0;color:var(--line);cursor:pointer;padding:0 .1rem}.starpick button.on{color:#f5a623}
+.dist{margin-top:.6rem;display:grid;gap:.2rem;font-size:.8rem}.dist div{display:grid;grid-template-columns:2rem 1fr 2rem;align-items:center;gap:.4rem}.dist i{display:block;height:.45rem;background:#f5a623;border-radius:4px;min-width:2px}.dist b{font-weight:400;text-align:right}
+.review p{margin:.3rem 0}.tagbtns{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.35rem}.tagbtns .fc{font-size:.7rem;padding:.15rem .5rem}

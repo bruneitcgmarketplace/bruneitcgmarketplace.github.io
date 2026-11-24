@@ -1,4 +1,4 @@
-import { sb, state, esc, guard, rpc, toast, needLogin, bindLogin, PRICE, BANK, isMember } from '../lib.js';
+import { sb, state, esc, guard, rpc, toast, needLogin, bindLogin, PRICE, BANK, isMember, TAGS } from '../lib.js';
 
 export async function viewMembership($app) {
   if (!state.user) { $app.innerHTML = `<h1>Membership</h1>${needLogin('see membership')}`; return bindLogin($app); }
@@ -22,11 +22,13 @@ export async function viewMembership($app) {
 
 export async function viewAdmin($app) {
   if (!state.me?.is_admin) { $app.innerHTML = '<div class="notice err">Admin only</div>'; return; }
-  const [reqs, reps, users] = await Promise.all([
+  const [reqs, reps, users, tg] = await Promise.all([
     sb.from('membership_requests').select('*, user:profiles!membership_requests_user_id_fkey(display_name)').eq('status', 'pending').order('created_at'),
     sb.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(display_name)').eq('resolved', false).order('created_at'),
     sb.from('private_profiles').select('id, strikes, member_until, is_admin, profile:profiles!private_profiles_id_fkey(display_name, created_at)').order('id').limit(200),
+    sb.from('user_tags').select('user_id, tag').limit(2000),
   ]);
+  const tagOf = new Map(); for (const x of tg.data || []) (tagOf.get(x.user_id) || tagOf.set(x.user_id, new Set()).get(x.user_id)).add(x.tag);
   const { count: openProblems } = await sb.from('problem_reports').select('id', { count: 'exact', head: true }).neq('status', 'resolved');
   const ul = (users.data || []).sort((a, b) => (b.profile?.created_at || '').localeCompare(a.profile?.created_at || ''));
   $app.innerHTML = `<h1>Admin</h1><p><a class="btn ${openProblems ? '' : 'sec'}" href="#/problems">🛠 Problem reports${openProblems ? ` (${openProblems} open)` : ''}</a></p><h2>Pending memberships</h2>
@@ -36,7 +38,7 @@ export async function viewAdmin($app) {
     ${reps.data?.length ? `<table>${reps.data.map((r) => `<tr><td><a href="#/listing/${r.listing_id}">listing</a></td><td>${esc(r.reason)}<br><span class="muted">by ${esc(r.reporter?.display_name)}</span></td><td>
       <button class="btn bad" data-cl="${r.listing_id}" data-rp="${r.id}">Cancel listing</button> <button class="btn sec" data-rs="${r.id}">Dismiss</button></td></tr>`).join('')}</table>` : '<p class="muted">None</p>'}
     <h2 style="margin-top:1.2rem">Users (${ul.length})</h2>
-    <table>${ul.map((u) => `<tr><td>${esc(u.profile?.display_name)}${u.is_admin ? ' <span class="badge warn">admin</span>' : ''}<br><span class="muted">joined ${u.profile?.created_at ? new Date(u.profile.created_at).toLocaleDateString() : ''}</span></td>
+    <table>${ul.map((u) => `<tr><td><a href="#/user/${u.id}">${esc(u.profile?.display_name)}</a>${u.is_admin ? ' <span class="badge warn">admin</span>' : ''}<br><span class="muted">joined ${u.profile?.created_at ? new Date(u.profile.created_at).toLocaleDateString() : ''}</span><div class="tagbtns">${Object.entries(TAGS).map(([k, l]) => `<button class="fc ${tagOf.get(u.id)?.has(k) ? 'on' : ''}" data-tg="${u.id}|${k}|${tagOf.get(u.id)?.has(k) ? 0 : 1}">${esc(l)}</button>`).join('')}</div></td>
       <td>${u.member_until && new Date(u.member_until) > new Date() ? '⭐ ' + new Date(u.member_until).toLocaleDateString() : 'Free'}<br><span class="muted">strikes ${u.strikes}</span></td>
       <td><button class="btn sec sm-btn" data-gr="${u.id}">+30d</button> <button class="btn sec sm-btn" data-rv="${u.id}">Revoke</button> ${u.strikes ? `<button class="btn sec sm-btn" data-st="${u.id}">Clear strikes</button>` : ''}</td></tr>`).join('')}</table>`;
   const bind = (attr, fn) => $app.querySelectorAll(`[${attr}]`).forEach((b) => (b.onclick = guard(async () => { await fn(b); viewAdmin($app); })));
@@ -44,6 +46,7 @@ export async function viewAdmin($app) {
   bind('data-rj', (b) => rpc('admin_reject_membership', { p_request: Number(b.dataset.rj) }));
   bind('data-cl', (b) => rpc('admin_cancel_listing', { p_listing: b.dataset.cl, p_report: Number(b.dataset.rp) }));
   bind('data-rs', (b) => rpc('admin_resolve_report', { p_report: Number(b.dataset.rs) }));
+  bind('data-tg', (b) => { const [u, k, on] = b.dataset.tg.split('|'); return rpc('set_user_tag', { p_user: u, p_tag: k, p_on: on === '1' }); });
   bind('data-gr', (b) => rpc('admin_grant_membership', { p_user: b.dataset.gr, p_days: 30 }));
   bind('data-rv', (b) => rpc('admin_grant_membership', { p_user: b.dataset.rv, p_days: 0 }));
   bind('data-st', (b) => rpc('admin_set_strikes', { p_user: b.dataset.st, p_strikes: 0 }));

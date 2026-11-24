@@ -1,7 +1,7 @@
 import { addToCart, removeFromCart, inCart } from '../cart.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, shareReceipt, canShareFiles, priceDiff, fmtDelta } from '../receipt.js';
 import { soldSheet } from '../sold.js';
-import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge, yuyuCard, yuyuFromImg } from '../lib.js';
+import { userMeta, starsHtml, tagsHtml, rateSheet, sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge, yuyuCard, yuyuFromImg } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
   const cat = await loadCatalog();
@@ -13,6 +13,7 @@ export async function viewListing($app, id, setUnsub) {
       ? await sb.from('bids').select('amount,created_at,bidder:profiles!bids_bidder_id_fkey(display_name)').eq('listing_id', id).order('amount', { ascending: false }).limit(20)
       : { data: [] };
     const c = cat.byRef.get(l.card_ref), ref = c ? refBnd(c) : 0;
+    const sm = (await userMeta([l.seller_id])).get(l.seller_id) || { avg: 0, n: 0, tags: [] };
     const uid = state.user?.id, isSeller = uid === l.seller_id, isBuyer = uid === l.buyer_id;
     const photos = l.photos?.length ? l.photos : [l.catalog_image].filter(Boolean);
     const small = (u) => upImg(u, '250_350'), sharp = (u) => upImg(u, 'front'), thumb = (u) => upImg(u, '100_140');
@@ -44,8 +45,9 @@ export async function viewListing($app, id, setUnsub) {
     else if (l.status === 'reserved') actions = `<div class="notice">Reserved by another buyer.</div>`;
     else if (l.status === 'sold' && (isSeller || isBuyer)) {
       let ct = null; try { ct = (await rpc('get_contact', { p_listing: id }))?.[0]; } catch {}
+      let rated = null; try { rated = (await sb.from('ratings').select('stars').eq('listing_id', id).eq('rater_id', state.user.id).maybeSingle()).data; } catch {}
       actions = `<div class="notice ok">Sold${pd.changed ? ` at ${bnd(pd.final)}: ${esc(fmtDelta(pd))} from the listing price of ${bnd(pd.listing)}` : ''}. This deal is complete.</div>
-        <div class="row tight">${isSeller && ct ? `<a class="btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(rd))}">💬 Inform buyer on WhatsApp</a>` : ''}<button class="btn sec" id="rcpt">📄 Receipt (PDF)</button>${canShareFiles() ? '<button class="btn sec" id="rshare">Share receipt</button>' : ''}</div>
+        <div class="row tight">${isSeller && ct ? `<a class="btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(rd))}">💬 Inform buyer on WhatsApp</a>` : ''}<button class="btn sec" id="rcpt">📄 Receipt (PDF)</button>${canShareFiles() ? '<button class="btn sec" id="rshare">Share receipt</button>' : ''}${rated ? '' : `<button class="btn" id="rate">⭐ Rate the ${isSeller ? 'buyer' : 'seller'}</button>`}</div>${rated ? `<p class="muted">You rated the ${isSeller ? 'buyer' : 'seller'} ${'★'.repeat(rated.stars)}</p>` : ''}
         <p class="muted">Receipt no. ${esc(rd.no)}.${isSeller ? ' Tap Inform buyer to message them, then send the PDF receipt in the chat (Share receipt can send it straight from your phone).' : ''}</p>`;
     } else if (l.status === 'sold') actions = `<div class="notice">Sold.</div>`;
     else if (l.status === 'ended') actions = `<div class="notice">Auction ended without a sale.</div>`;
@@ -63,7 +65,7 @@ export async function viewListing($app, id, setUnsub) {
       <p class="price" style="font-size:1.5rem">${bnd(shown)}</p>
       ${ref > 0 ? `<p class="muted">Reference ${bnd(ref)} (${yy ? `<a href="${esc(yy)}" target="_blank" rel="noopener">Yuyutei JP shop price ↗</a>` : 'Yuyutei JP shop price'})${l.type === 'buy_now' && diff !== null ? ` · ${diff <= 0 ? Math.abs(diff) + '% below' : diff + '% above'} reference` : ''}. Condition and local demand affect the real value.</p>` : ''}
       ${l.type === 'auction' ? `<p>${l.bid_count} bids${l.bidder ? ` · leader ${esc(l.bidder.display_name)}` : ''}<br>${l.status === 'active' ? 'Ends in ' + timerHtml(l.ends_at, true) : 'Ended'}</p>` : ''}
-      <p>Seller: <b>${esc(l.seller?.display_name)}</b></p>
+      <p>Seller: <a href="#/user/${esc(l.seller_id)}"><b>${esc(l.seller?.display_name)}</b></a> ${tagsHtml(sm.tags)} ${starsHtml(sm.avg, sm.n)}</p>
       ${l.description ? `<p>${esc(l.description)}</p>` : ''}
       <div class="panel">${actions}</div>
       ${uid && !isSeller ? `<button class="btn sec" id="report">Report listing</button>` : ''}
@@ -76,6 +78,7 @@ export async function viewListing($app, id, setUnsub) {
 
     const on = (sel, fn) => { const el = $app.querySelector('#' + sel); if (el) el.onclick = guard(fn); };
     on('login', signIn);
+    on('rate', async () => { if (await rateSheet(id, isSeller ? 'buyer' : 'seller')) draw(); });
     on('cart', async () => { if (inCart(id)) { removeFromCart(id); toast('Removed from cart'); } else { addToCart(id); toast('Added to cart'); } draw(); });
     on('buy', async () => { if (!(await confirmSheet('Buy this card?', 'The card is put on hold for you, so nobody else can buy it. You then arrange payment and meet-up with the seller on WhatsApp.', 'Buy now'))) return; await rpc('buy_now', { p_listing: id }); toast('This card is now on hold for you. Contact the seller on WhatsApp.'); draw(); });
     on('bid', async () => { await rpc('place_bid', { p_listing: id, p_amount: Number($app.querySelector('#amt').value) }); toast('Bid placed'); draw(); });

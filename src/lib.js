@@ -255,3 +255,35 @@ export function avatarHtml(size = 'md') {
   const pic = state.avatar || u.user_metadata?.avatar_url || u.user_metadata?.picture;
   return `<span class="av ${size}">${esc(String(name).trim()[0]?.toUpperCase() || '?')}${pic ? `<img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
 }
+
+// ---------- ratings and tags ----------
+export const TAGS = { verified: '✔ Verified', moderator: '🛡 Moderator', trusted: '★ Trusted seller', vip: '💎 VIP' };
+// ratings summary + tags for a list of user ids -> Map(id -> { avg, n, tags })
+export async function userMeta(ids) {
+  const out = new Map(); const u = [...new Set(ids.filter(Boolean))]; if (!u.length) return out;
+  for (const id of u) out.set(id, { avg: 0, n: 0, tags: [] });
+  const [r, t] = await Promise.all([sb.from('rating_summary').select('ratee_id, avg, n').in('ratee_id', u), sb.from('user_tags').select('user_id, tag').in('user_id', u)]);
+  for (const x of r.data || []) { const m = out.get(x.ratee_id); if (m) { m.avg = Number(x.avg); m.n = x.n; } }
+  for (const x of t.data || []) out.get(x.user_id)?.tags.push(x.tag);
+  return out;
+}
+export const starsHtml = (avg, n) => (n ? `<span class="stars" title="${avg.toFixed(1)} out of 5">★ ${avg.toFixed(1)}</span> <span class="muted">(${n})</span>` : '<span class="muted">No ratings yet</span>');
+export const tagsHtml = (tags = []) => Object.keys(TAGS).filter((k) => tags.includes(k)).map((k) => `<span class="utag t-${k}">${esc(TAGS[k])}</span>`).join(' ');
+// 1-5 star pop-up with an optional comment. Resolves true after the rating is saved.
+export function rateSheet(listingId, whom) {
+  return new Promise((res) => {
+    let stars = 0;
+    const s = sheet(`<h2>Rate the ${esc(whom)}</h2><p class="muted">How did the deal go? Your rating is public and cannot be changed later.</p>
+      <div class="starpick" id="rs-stars">${[1, 2, 3, 4, 5].map((i) => `<button type="button" data-s="${i}" aria-label="${i} star${i > 1 ? 's' : ''}">★</button>`).join('')}</div>
+      <label>Comment (optional)</label><textarea id="rs-c" rows="3" maxlength="300" placeholder="Fast reply, card as described…"></textarea>
+      <div class="row tight" style="margin-top:.6rem"><button class="btn" id="rs-ok" disabled>Submit rating</button><button class="btn sec" id="rs-no">Cancel</button></div>`, { onClose: () => res(false) });
+    const q = (x) => s.el.querySelector(x);
+    q('#rs-stars').querySelectorAll('button').forEach((b) => (b.onclick = () => { stars = Number(b.dataset.s); q('#rs-stars').querySelectorAll('button').forEach((x) => x.classList.toggle('on', Number(x.dataset.s) <= stars)); q('#rs-ok').disabled = false; }));
+    q('#rs-no').onclick = () => s.close();
+    q('#rs-ok').onclick = async () => {
+      q('#rs-ok').disabled = true;
+      try { await rpc('rate_user', { p_listing: listingId, p_stars: stars, p_comment: q('#rs-c').value }); toast('Thanks, rating saved'); res(true); s.close(); }
+      catch (e) { q('#rs-ok').disabled = false; toast(e.message || String(e), true); }
+    };
+  });
+}

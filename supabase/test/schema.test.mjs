@@ -21,6 +21,7 @@ await db.exec(readFileSync(new URL('../08_sold_at.sql', import.meta.url), 'utf8'
 await db.exec(readFileSync(new URL('../10_avatar.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../12_problem_reports.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../09_agreed_price.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../14_ratings_tags.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -254,6 +255,43 @@ ok('share table not readable directly', (await as(buyer, `select * from inventor
 await as(seller, `select unshare_inventory()`);
 ok('link dies after unshare', await fails(null, `select get_shared_inventory($1)`, [tok], 'not valid'));
 ok('new link differs after re-share', (await as(seller, `select share_inventory() t`)).rows[0].t !== tok);
+
+// --- ratings and tags
+{
+  const rl = await lst(seller, { type: 'buy_now', price: 10 });
+  ok('cannot rate before the deal is sold', await fails(seller, `select rate_user($1, 5, 'x')`, [rl], 'after the deal'));
+  await as(buyer, `select buy_now($1)`, [rl]);
+  ok('cannot rate while only reserved', await fails(buyer, `select rate_user($1, 5, 'x')`, [rl], 'after the deal'));
+  await as(seller, `select mark_sold($1)`, [rl]);
+  ok('outsider cannot rate the deal', await fails(buyer2, `select rate_user($1, 5, 'x')`, [rl], 'Only the buyer or the seller'));
+  ok('stars must be 1 to 5', await fails(buyer, `select rate_user($1, 6, 'x')`, [rl], '1 to 5') && await fails(buyer, `select rate_user($1, 0, 'x')`, [rl], '1 to 5'));
+  ok('comment over 300 chars rejected', await fails(buyer, `select rate_user($1, 4, $2)`, [rl, 'a'.repeat(301)], 'too long'));
+  await as(buyer, `select rate_user($1, 4, '  Smooth deal  ')`, [rl]);
+  const rr = (await admin(`select * from ratings where listing_id = $1`, [rl])).rows[0];
+  ok('buyer rating stored for the seller, comment trimmed', rr.ratee_id === seller && rr.rater_id === buyer && rr.stars === 4 && rr.comment === 'Smooth deal');
+  ok('cannot rate the same deal twice', await fails(buyer, `select rate_user($1, 5, null)`, [rl], 'already rated'));
+  await as(seller, `select rate_user($1, 5, null)`, [rl]);
+  ok('seller can rate the buyer once', (await admin(`select count(*)::int c from ratings where listing_id = $1`, [rl])).rows[0].c === 2);
+  ok('anyone can read ratings', (await as(null, `select count(*)::int c from ratings`)).rows[0].c === 2);
+  ok('direct insert into ratings denied', await fails(buyer2, `insert into ratings(listing_id, rater_id, ratee_id, stars) values ($1, $2, $3, 5)`, [rl, buyer2, seller]));
+  ok('direct update of ratings denied', (await as(buyer, `update ratings set stars = 1 where rater_id = $1 returning id`, [buyer])).rows.length === 0);
+  const sm = (await as(null, `select avg::float a, n from rating_summary where ratee_id = $1`, [seller])).rows[0];
+  ok('summary: seller 4.0 from 1 rating', sm && sm.a === 4 && sm.n === 1);
+  ok('normal user cannot delete a rating', await fails(buyer, `select admin_delete_rating($1)`, [rr.id], 'Admin only'));
+  await as(boss, `select admin_delete_rating($1)`, [rr.id]);
+  ok('admin can delete a rating', (await admin(`select count(*)::int c from ratings where id = $1`, [rr.id])).rows[0].c === 0);
+
+  ok('normal user cannot give a tag', await fails(seller, `select set_user_tag($1, 'verified', true)`, [seller], 'Admin only'));
+  ok('direct insert into user_tags denied', await fails(seller, `insert into user_tags(user_id, tag) values ($1, 'verified')`, [seller]));
+  ok('unknown tag rejected', await fails(boss, `select set_user_tag($1, 'god', true)`, [seller], 'Unknown tag'));
+  await as(boss, `select set_user_tag($1, 'verified', true)`, [seller]);
+  await as(boss, `select set_user_tag($1, 'verified', true)`, [seller]);
+  await as(boss, `select set_user_tag($1, 'moderator', true)`, [seller]);
+  ok('admin can tag a user (twice is harmless)', (await as(null, `select tag from user_tags where user_id = $1 order by tag`, [seller])).rows.map((r) => r.tag).join() === 'moderator,verified');
+  await as(boss, `select set_user_tag($1, 'moderator', false)`, [seller]);
+  ok('admin can remove a tag', (await as(null, `select tag from user_tags where user_id = $1`, [seller])).rows.map((r) => r.tag).join() === 'verified');
+  ok('a tag does not make a user admin', !(await admin(`select is_admin(${"'" + seller + "'"}) a`)).rows[0].a);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, rateSheet } from '../lib.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
@@ -32,6 +32,8 @@ export async function viewOrders($app, opts = {}) {
   const sel = '*, seller:profiles!listings_seller_id_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)';
 
   const LST = new Map();
+  let myRated = new Set();   // sold deals I already rated
+  try { myRated = new Set(((await sb.from('ratings').select('listing_id').eq('rater_id', uid).limit(2000)).data || []).map((r) => r.listing_id)); } catch {}
   const PER = { all: 'All time', month: 'This month', last: 'Last month', ytd: 'This year' };
   const inPeriod = (l, per) => {
     const d = new Date(l.sold_at || l.created_at), now = new Date(), y = now.getFullYear(), m = now.getMonth(), lm = new Date(y, m - 1, 1);
@@ -66,6 +68,7 @@ export async function viewOrders($app, opts = {}) {
     if (role === 'sell' && l.status === 'active' && l.bid_count === 0) acts.push(['cancel', 'Cancel listing', 'bad']);
     if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
     if (l.status === 'sold') acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
+    if (l.status === 'sold' && l.buyer_id) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
       <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${stChip(l, uid, role)}</div>
         <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
@@ -80,6 +83,8 @@ export async function viewOrders($app, opts = {}) {
     el.querySelectorAll('[data-act]').forEach((b) => (b.onclick = guard(async () => {
       const a = b.dataset.act;
       if (a === 'sold') { const r = await soldSheet(LST.get(id)); if (!r) return; await rpc('mark_sold', { p_listing: id, p_agreed_price: r.price }); }
+      if (a === 'rated') return;
+      if (a === 'rate') { if (await rateSheet(id, LST.get(id).seller_id === uid ? 'buyer' : 'seller')) { myRated.add(id); reload(); } return; }
       if (a === 'receipt') { const { data: row } = await sb.from('listings').select(sel).eq('id', id).single(); downloadReceipt(receiptData(row, state.cat.byRef.get(row.card_ref)?.name || row.card_name)); return; }
       if (a === 'release') await rpc('seller_release', { p_listing: id, p_no_show: false });
       if (a === 'noshow') { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal. At 3 strikes they are blocked.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); }
