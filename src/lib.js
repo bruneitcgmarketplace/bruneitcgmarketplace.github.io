@@ -64,9 +64,9 @@ export function promptSheet(title, label, { value = '', okLabel = 'OK', multilin
 // ---------- catalog ----------
 const setKey = (id) => { const m = id.match(/^([a-z]+)(\d+)$/); const grp = { op: 0, eb: 1, prb: 2, st: 3 }[m?.[1]] ?? 4; return grp * 1000 - (m ? +m[2] : 0) * (grp === 3 ? -1 : 1); };
 
-export async function loadCatalog() {
-  if (state.cat) return state.cat;
-  const raw = await (await fetch(import.meta.env.BASE_URL + 'catalog.json')).json();
+export async function loadCatalog(force = false) {
+  if (state.cat && !force) return state.cat;
+  const raw = await (await fetch(import.meta.env.BASE_URL + 'catalog.json' + (force ? '?v=' + Date.now() : ''), force ? { cache: 'no-store' } : undefined)).json();
   const cards = [], byRef = new Map(), byCode = new Map(), bySet = new Map();
   for (const r of raw.cards) {
     const [num, set, code, jp, rarity, jpy, en, color, type] = r;
@@ -128,13 +128,13 @@ export const colorDot = (col) => {
   return `<span class="dot" style="background:${m[first] || '#475569'}" title="${esc(col)}"></span>`;
 };
 
-export async function loadFx() {
+export async function loadFx(force = false) {
   const manual = parseFloat(localStorage.getItem('fx_manual') || '');
   if (manual > 0) { state.fx = manual; state.fxSrc = 'manual'; return; }
   try {
     const cached = JSON.parse(localStorage.getItem('fx') || 'null');
-    if (cached && Date.now() - cached.t < 12 * 3600e3) { state.fx = cached.rate; state.fxSrc = 'frankfurter ' + cached.d; return; }
-    const r = await fetch('https://api.frankfurter.dev/v1/latest?base=JPY&symbols=SGD');
+    if (!force && cached && Date.now() - cached.t < 12 * 3600e3) { state.fx = cached.rate; state.fxSrc = 'frankfurter ' + cached.d; return; }
+    const r = await fetch('https://api.frankfurter.dev/v1/latest?base=JPY&symbols=SGD', force ? { cache: 'no-store' } : undefined);
     const j = await r.json();
     if (j?.rates?.SGD) { state.fx = j.rates.SGD; state.fxSrc = 'frankfurter ' + j.date; localStorage.setItem('fx', JSON.stringify({ rate: j.rates.SGD, d: j.date, t: Date.now() })); }
   } catch { const c = JSON.parse(localStorage.getItem('fx') || 'null'); if (c) { state.fx = c.rate; state.fxSrc = 'frankfurter ' + c.d + ' (cached)'; } }
