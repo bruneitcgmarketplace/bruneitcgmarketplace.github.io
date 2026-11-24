@@ -1,5 +1,6 @@
 import { addToCart, removeFromCart, inCart } from '../cart.js';
-import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, shareReceipt, canShareFiles } from '../receipt.js';
+import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, shareReceipt, canShareFiles, priceDiff, fmtDelta } from '../receipt.js';
+import { soldSheet } from '../sold.js';
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
@@ -17,7 +18,7 @@ export async function viewListing($app, id, setUnsub) {
     const small = (u) => upImg(u, '250_350'), sharp = (u) => upImg(u, 'front'), thumb = (u) => upImg(u, '100_140');
     const live = l.status === 'active' && (l.type === 'buy_now' || new Date(l.ends_at) > new Date());
     const held = l.status === 'reserved' && l.type === 'buy_now' && !isSeller && !isBuyer;
-    const rd = receiptData(l, c?.name || l.card_name);
+    const rd = receiptData(l, c?.name || l.card_name), pd = priceDiff(l);
     const minBid = l.current_bid == null ? Number(l.start_price) : Number(l.current_bid) + Number(l.bid_increment);
     const shown = l.type === 'auction' ? Number(l.current_bid ?? l.start_price) : Number(l.price);
 
@@ -43,7 +44,7 @@ export async function viewListing($app, id, setUnsub) {
     else if (l.status === 'reserved') actions = `<div class="notice">Reserved by another buyer.</div>`;
     else if (l.status === 'sold' && (isSeller || isBuyer)) {
       let ct = null; try { ct = (await rpc('get_contact', { p_listing: id }))?.[0]; } catch {}
-      actions = `<div class="notice ok">Sold. This deal is complete.</div>
+      actions = `<div class="notice ok">Sold${pd.changed ? ` at ${bnd(pd.final)}: ${esc(fmtDelta(pd))} from the listing price of ${bnd(pd.listing)}` : ''}. This deal is complete.</div>
         <div class="row tight">${isSeller && ct ? `<a class="btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(rd))}">💬 Inform buyer on WhatsApp</a>` : ''}<button class="btn sec" id="rcpt">📄 Receipt (PDF)</button>${canShareFiles() ? '<button class="btn sec" id="rshare">Share receipt</button>' : ''}</div>
         <p class="muted">Receipt no. ${esc(rd.no)}.${isSeller ? ' Tap Inform buyer to message them, then send the PDF receipt in the chat (Share receipt can send it straight from your phone).' : ''}</p>`;
     } else if (l.status === 'sold') actions = `<div class="notice">Sold.</div>`;
@@ -78,7 +79,7 @@ export async function viewListing($app, id, setUnsub) {
     on('buy', async () => { if (!(await confirmSheet('Buy this card?', 'The card is put on hold for you, so nobody else can buy it. You then arrange payment and meet-up with the seller on WhatsApp.', 'Buy now'))) return; await rpc('buy_now', { p_listing: id }); toast('This card is now on hold for you. Contact the seller on WhatsApp.'); draw(); });
     on('bid', async () => { await rpc('place_bid', { p_listing: id, p_amount: Number($app.querySelector('#amt').value) }); toast('Bid placed'); draw(); });
     on('cancel', async () => { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); draw(); });
-    on('sold', async () => { if (!(await confirmSheet('Mark this card as sold?', 'Confirm you have met the buyer and been paid. This completes the deal and takes one copy off your inventory if you track it.', 'Sold'))) return; await rpc('mark_sold', { p_listing: id }); toast('Marked as sold. You can now inform the buyer and send the receipt.'); draw(); });
+    on('sold', async () => { const r = await soldSheet(l); if (!r) return; await rpc('mark_sold', { p_listing: id, p_agreed_price: r.price }); toast('Marked as sold. You can now inform the buyer and send the receipt.'); draw(); });
     on('release', async () => { await rpc('seller_release', { p_listing: id, p_no_show: false }); draw(); });
     on('noshow', async () => { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); draw(); });
     on('unreserve', async () => { await rpc('cancel_reservation', { p_listing: id }); draw(); });

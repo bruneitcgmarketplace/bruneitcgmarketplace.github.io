@@ -1,5 +1,6 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet } from '../lib.js';
-import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt } from '../receipt.js';
+import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
+import { soldSheet } from '../sold.js';
 
 const stChip = (l, uid, role) => {
   const m = {
@@ -30,7 +31,21 @@ export async function viewOrders($app, opts = {}) {
   const body = $app.querySelector('#body');
   const sel = '*, seller:profiles!listings_seller_id_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)';
 
+  const LST = new Map();
+  const PER = { all: 'All time', month: 'This month', last: 'Last month', ytd: 'This year' };
+  const inPeriod = (l, per) => {
+    const d = new Date(l.sold_at || l.created_at), now = new Date(), y = now.getFullYear(), m = now.getMonth(), lm = new Date(y, m - 1, 1);
+    if (per === 'month') return d.getFullYear() === y && d.getMonth() === m;
+    if (per === 'last') return d.getFullYear() === lm.getFullYear() && d.getMonth() === lm.getMonth();
+    if (per === 'ytd') return d.getFullYear() === y;
+    return true;
+  };
+  const reportPanel = (role) => `<div class="panel rpt"><b>Order history report</b>
+    <div class="row tight" style="margin:.4rem 0"><select id="rp-per">${Object.entries(PER).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <button class="btn sec" data-rp="pdf" data-role="${role}">📄 Report (PDF)</button><button class="btn sec" data-rp="csv" data-role="${role}">📊 Excel (CSV)</button></div>
+    <p class="muted">${role === 'sell' ? 'Completed sales' : 'Completed purchases'} for the period, with listing price, final price and the difference (BND and %). Orders still on hold are not included.</p></div>`;
   const card = async (l, role) => {
+    LST.set(l.id, l);
     const c = state.cat.byRef.get(l.card_ref);
     const price = listingPrice(l);
     let extra = '', ct = null;
@@ -44,6 +59,8 @@ export async function viewOrders($app, opts = {}) {
       const ct = await contactOf(l);
       if (ct) extra += `<a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(receiptData(l, c?.name || l.card_name)))}">💬 Inform buyer on WhatsApp</a> `;
     }
+    const pd = l.status === 'sold' ? priceDiff(l) : null;
+    const dcls = pd?.changed ? (role === 'buy' ? (pd.delta < 0 ? 'ok' : 'bad') : (pd.delta < 0 ? 'warn' : 'ok')) : '';
     const acts = [];
     if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
     if (role === 'sell' && l.status === 'active' && l.bid_count === 0) acts.push(['cancel', 'Cancel listing', 'bad']);
@@ -52,16 +69,17 @@ export async function viewOrders($app, opts = {}) {
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
       <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${stChip(l, uid, role)}</div>
         <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
-        <div><span class="price">${bnd(price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
+        <div><span class="price">${bnd(pd ? pd.final : price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
-        <div class="muted">${role === 'sell' ? (l.buyer ? 'Buyer: ' + esc(l.buyer.display_name) : '') : 'Seller: ' + esc(l.seller?.display_name)} · ${new Date(l.created_at).toLocaleDateString()}</div>
+        ${pd ? (pd.changed ? `<div class="row tight" style="margin:.2rem 0"><span class="chip ${dcls}">${esc(fmtDelta(pd))} from listing price</span><span class="muted">Listing price ${bnd(pd.listing)}</span></div>` : '<div class="muted">Sold at the listing price</div>') : ''}
+        <div class="muted">${role === 'sell' ? (l.buyer ? 'Buyer: ' + esc(l.buyer.display_name) : '') : 'Seller: ' + esc(l.seller?.display_name)} · ${l.status === 'sold' && l.sold_at ? 'Sold ' : ''}${new Date((l.status === 'sold' && l.sold_at) || l.created_at).toLocaleDateString()}</div>
         ${extra}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
   };
   const wire = (reload) => body.querySelectorAll('.order').forEach((el) => {
     const id = el.dataset.id;
     el.querySelectorAll('[data-act]').forEach((b) => (b.onclick = guard(async () => {
       const a = b.dataset.act;
-      if (a === 'sold') { if (!(await confirmSheet('Mark this card as sold?', 'Confirm you have met the buyer and been paid. This completes the deal.', 'Sold'))) return; await rpc('mark_sold', { p_listing: id }); }
+      if (a === 'sold') { const r = await soldSheet(LST.get(id)); if (!r) return; await rpc('mark_sold', { p_listing: id, p_agreed_price: r.price }); }
       if (a === 'receipt') { const { data: row } = await sb.from('listings').select(sel).eq('id', id).single(); downloadReceipt(receiptData(row, state.cat.byRef.get(row.card_ref)?.name || row.card_name)); return; }
       if (a === 'release') await rpc('seller_release', { p_listing: id, p_no_show: false });
       if (a === 'noshow') { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal. At 3 strikes they are blocked.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); }
@@ -80,7 +98,7 @@ export async function viewOrders($app, opts = {}) {
     for (const b of bids.data || []) if (!seen.has(b.listing_id)) { seen.add(b.listing_id); bidding.push(b.listings); }
     const wonRows = won.data || [];
     body.innerHTML = `<h2>Active bids</h2>${bidding.length ? (await Promise.all(bidding.map((l) => card(l, 'buy')))).join('') : '<p class="muted">No active bids. <a href="#/market?type=auction">Browse auctions</a></p>'}
-      <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
+      <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${reportPanel('buy')}${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
   } else if (tab === 'selling') {
     const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved', 'ended', 'cancelled']).order('created_at', { ascending: false }).limit(80);
     const g = (s) => (data || []).filter((l) => s.includes(l.status));
@@ -88,13 +106,25 @@ export async function viewOrders($app, opts = {}) {
     body.innerHTML = `${only ? '' : '<p><a class="btn" href="#/sell">+ New listing</a></p>'}${await sect('Needs settlement', g(['reserved']), 'None.')}<div style="height:.8rem"></div>${await sect('Active listings', g(['active']), 'No active listings.')}<div style="height:.8rem"></div>${await sect('Ended and cancelled', g(['ended', 'cancelled']).slice(0, 15), 'None.')}`;
   } else {
     const { data } = await sb.from('listings').select(sel).eq('seller_id', uid).eq('status', 'sold').order('created_at', { ascending: false }).limit(200);
-    const rows = data || [], total = rows.reduce((a, l) => a + listingPrice(l), 0);
+    const rows = data || [], total = rows.reduce((a, l) => a + finalPrice(l), 0), listed = rows.reduce((a, l) => a + listingPrice(l), 0), net = Math.round((total - listed) * 100) / 100;
     const month = new Date().toISOString().slice(0, 7);
-    const thisM = rows.filter((l) => l.created_at.startsWith(month)).reduce((a, l) => a + listingPrice(l), 0);
-    body.innerHTML = `<div class="stats"><div class="stat"><b>${rows.length}</b><span>Sold</span></div><div class="stat"><b>${bnd(total)}</b><span>Total sales</span></div><div class="stat"><b>${bnd(thisM)}</b><span>This month (by listing date)</span></div></div>
+    const thisM = rows.filter((l) => (l.sold_at || l.created_at).startsWith(month)).reduce((a, l) => a + finalPrice(l), 0);
+    body.innerHTML = `<div class="stats"><div class="stat"><b>${rows.length}</b><span>Sold</span></div><div class="stat"><b>${bnd(total)}</b><span>Total sales</span></div><div class="stat"><b>${bnd(thisM)}</b><span>This month</span></div><div class="stat"><b>${net === 0 ? 'At listing' : (net < 0 ? '- ' : '+ ') + bnd(Math.abs(net)) + ' (' + (net < 0 ? '-' : '+') + Math.abs(listed ? (net / listed) * 100 : 0).toFixed(1) + '%)'}</b><span>vs listing prices</span></div></div>
+      ${reportPanel('sell')}
       <input id="sq" placeholder="Search sold cards or buyer" style="margin:.6rem 0">
       <div id="sl">${(await Promise.all(rows.map((l) => card(l, 'sell')))).join('') || '<p class="muted">Nothing sold yet. Sales appear here after you tap "Sold".</p>'}</div>`;
     body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); };
   }
   wire(() => viewOrders($app, opts));
+  body.querySelectorAll('[data-rp]').forEach((b) => (b.onclick = guard(async () => {
+    const role = b.dataset.role, per = body.querySelector('#rp-per').value;
+    const { data } = await sb.from('listings').select(sel).eq(role === 'sell' ? 'seller_id' : 'buyer_id', uid).eq('status', 'sold').limit(2000);
+    const rows = (data || []).filter((l) => inPeriod(l, per));
+    if (!rows.length) { toast('No completed orders in this period', true); return; }
+    const m = reportModel(rows, role, (l) => state.cat.byRef.get(l.card_ref)?.name || l.card_name);
+    const meta = { title: role === 'sell' ? 'Sales history report' : 'Purchase history report', period: PER[per], who: state.me?.display_name || '' };
+    const file = `${role === 'sell' ? 'Sales' : 'Purchases'}-${per}-${new Date().toISOString().slice(0, 10)}`;
+    if (b.dataset.rp === 'csv') downloadText(`${file}.csv`, reportCsv(m)); else downloadBlob(`${file}.pdf`, reportPdf(m, meta));
+    toast(`Report ready: ${m.sum.n} order${m.sum.n > 1 ? 's' : ''}`);
+  })));
 }

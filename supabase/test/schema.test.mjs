@@ -18,6 +18,7 @@ await db.exec(readFileSync(new URL('../04_admin.sql', import.meta.url), 'utf8'))
 await db.exec(readFileSync(new URL('../05_share.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../07_hold_message.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../08_sold_at.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../09_agreed_price.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -161,6 +162,29 @@ ok('mark_sold removes row at last copy', (await as(seller, `select * from invent
 const bn5 = await lst(seller, { type: 'buy_now', price: 7, card_ref: ref });
 await as(buyer, `select buy_now($1)`, [bn5]);
 ok('mark_sold works with no inventory row', !(await fails(seller, `select mark_sold($1)`, [bn5])));
+
+// --- agreed sale price (09)
+const ap1 = await lst(seller, { type: 'buy_now', price: 100 });
+await as(buyer, `select buy_now($1)`, [ap1]);
+ok('agreed price: non-owner cannot set it', await fails(buyer, `select mark_sold($1, 80)`, [ap1], 'Not your listing'));
+ok('agreed price: zero rejected', await fails(seller, `select mark_sold($1, 0)`, [ap1], 'above 0'));
+ok('agreed price: negative rejected', await fails(seller, `select mark_sold($1, -5)`, [ap1], 'above 0'));
+ok('agreed price: rounds to 0.00 rejected', await fails(seller, `select mark_sold($1, 0.004)`, [ap1], 'above 0'));
+ok('agreed price: still reserved after rejected attempts', (await as(seller, `select status from listings where id=$1`, [ap1])).rows[0].status === 'reserved');
+await as(seller, `select mark_sold($1, 92.5)`, [ap1]);
+const apRow = (await as(buyer, `select status, agreed_price, price, sold_at is not null s from listings where id=$1`, [ap1])).rows[0];
+ok('agreed price: stored, listing price untouched', apRow.status === 'sold' && Number(apRow.agreed_price) === 92.5 && Number(apRow.price) === 100 && apRow.s);
+const ap2 = await lst(seller, { type: 'buy_now', price: 40 });
+await as(buyer, `select buy_now($1)`, [ap2]); await as(seller, `select mark_sold($1)`, [ap2]);
+ok('agreed price: left empty means null (listing price)', (await as(buyer, `select agreed_price is null n from listings where id=$1`, [ap2])).rows[0].n);
+const ap3 = await lst(seller, { type: 'buy_now', price: 40 });
+await as(buyer, `select buy_now($1)`, [ap3]); await as(seller, `select mark_sold($1, 40)`, [ap3]);
+ok('agreed price: equal to listing price is stored as null', (await as(buyer, `select agreed_price is null n from listings where id=$1`, [ap3])).rows[0].n);
+const ap4 = await lst(seller, { type: 'buy_now', price: 40 });
+await as(buyer, `select buy_now($1)`, [ap4]); await as(seller, `select mark_sold($1, 45.678)`, [ap4]);
+ok('agreed price: higher than listing allowed, rounded to 2 dp', Number((await as(buyer, `select agreed_price from listings where id=$1`, [ap4])).rows[0].agreed_price) === 45.68);
+ok('agreed price: only reserved listings can be marked sold', await fails(seller, `select mark_sold($1, 10)`, [ap1], 'Only reserved'));
+ok('agreed price: single-argument mark_sold still works (no ambiguity)', (await as(seller, `select count(*) c from pg_proc where proname = 'mark_sold'`)).rows[0].c == 1);
 
 // --- admin tools
 ok('non-admin cannot grant membership', await fails(buyer, `select admin_grant_membership($1, 30)`, [buyer], 'Admin only'));
