@@ -82,6 +82,17 @@ const setKeyOf = (id) => (GRP_ORDER[groupOf(id)] ?? 0) * 1000 + numOf(id);
 
 // ---- shared with the Marketplace tabs ----
 export { FRESH, activeCount };
+// Filters button + sheet for any list of cards (My collection, Orders, My listings). key = sessionStorage key.
+export function cardFilter(key, cat, onChange) {
+  const f = Object.assign(FRESH(), JSON.parse(sessionStorage.getItem(key) || '{}'), { q: '', sale: false });
+  const ensure = async () => { if (NEEDS_INFO(f)) await loadInfo(); };
+  const label = () => { const n = activeCount(f); return '⚙ Filters' + (n ? ` (${n})` : ''); };
+  const on = () => activeCount(f) > 0;
+  // refs: Set of card refs present in the list -> Set of refs that pass
+  const pass = (refs) => new Set(matchSync(f, [...refs].map((r) => cat.byRef.get(r)).filter(Boolean), state.inv || new Map()).map((c) => c.ref));
+  const open = (countFn) => filterSheet({ f, cat, ensureData: ensure, market: true, unit: 'item', count: countFn, done: () => { sessionStorage.setItem(key, JSON.stringify(f)); onChange(); } });
+  return { f, on, label, pass, open, ensure };
+}
 export const needsInfo = NEEDS_INFO;
 export const matchSync = (f, cards, inv) => apply(f, cards, inv, new Set(), NEEDS_INFO(f) ? info : null).list;
 

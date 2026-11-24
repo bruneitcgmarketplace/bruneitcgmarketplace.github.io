@@ -1,5 +1,5 @@
 import '../home.css';
-import { state, sb, esc, loadCatalog, loadInv, tile, bindLogin, rpc } from '../lib.js';
+import { state, sb, esc, loadCatalog, loadInv, tile, bindLogin, rpc, groupBuyNow } from '../lib.js';
 import { renderHomeStats, renderHomeFeeds, fmtBrunei } from '../home-content.js';
 
 export async function viewHome($app) {
@@ -19,7 +19,7 @@ export async function viewHome($app) {
     } catch { /* Keep last-successful data and original source timestamps. */ }
     return feed;
   }
-  const row = (title, result, href, empty) => `<section class="home-live"><div class="sec-h"><h2>${title}</h2><a href="${href}">See all</a></div>${result.error ? '<div class="panel muted">Listings are temporarily unavailable. Please try again shortly.</div>' : result.data?.length ? `<div class="hscroll">${result.data.map(tile).join('')}</div>` : `<div class="panel muted">${empty}</div>`}</section>`;
+  const row = (title, result, href, empty) => `<section class="home-live"><div class="sec-h"><h2>${title}</h2><a href="${href}">See all</a></div>${result.error ? '<div class="panel muted">Listings are temporarily unavailable. Please try again shortly.</div>' : result.data?.length ? `<div class="hscroll">${groupBuyNow(result.data).map(tile).join('')}</div>` : `<div class="panel muted">${empty}</div>`}</section>`;
   async function refresh() {
     try {
       const now = new Date().toISOString();

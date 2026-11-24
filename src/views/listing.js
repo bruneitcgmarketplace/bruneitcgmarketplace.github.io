@@ -14,6 +14,16 @@ export async function viewListing($app, id, setUnsub) {
       : { data: [] };
     const c = cat.byRef.get(l.card_ref), ref = c ? refBnd(c) : 0;
     const sm = (await userMeta([l.seller_id])).get(l.seller_id) || { avg: 0, n: 0, tags: [] };
+    // identical copies from the same seller (same card, condition, language and price) that are still free: the buyer can take several
+    let sibs = [l.id], avail = 1;   // sibs = copies you can take now (up to 200 per purchase), avail = how many exist
+    if (l.type === 'buy_now' && l.status === 'active' && state.user && state.user.id !== l.seller_id) {
+      try {
+        const { data: s, count } = await sb.from('listings').select('id', { count: 'exact' }).eq('seller_id', l.seller_id).eq('card_ref', l.card_ref).eq('condition', l.condition).eq('language', l.language).eq('price', l.price).eq('type', 'buy_now').eq('status', 'active').order('created_at').limit(200);
+        sibs = [l.id, ...(s || []).map((x) => x.id).filter((x) => x !== l.id)];
+        avail = Math.max(count ?? 0, sibs.length);
+      } catch { /* single copy */ }
+    }
+    let qty = 1;
     const uid = state.user?.id, isSeller = uid === l.seller_id, isBuyer = uid === l.buyer_id;
     const photos = l.photos?.length ? l.photos : [l.catalog_image].filter(Boolean);
     const small = (u) => upImg(u, '250_350'), sharp = (u) => upImg(u, 'front'), thumb = (u) => upImg(u, '100_140');
@@ -25,7 +35,7 @@ export async function viewListing($app, id, setUnsub) {
 
     let actions = '';
     if (!uid && live) actions = `<p class="muted">Sign in to ${l.type === 'auction' ? 'bid' : 'buy'}.</p><button class="btn" id="login">Sign in with Google</button>`;
-    else if (live && !isSeller && l.type === 'buy_now') actions = `<div class="row tight"><button class="btn" id="buy">Buy now · ${bnd(l.price)}</button><button class="btn sec" id="cart">${inCart(l.id) ? '✓ In cart · Remove' : '🛒 Add to cart'}</button></div>
+    else if (live && !isSeller && l.type === 'buy_now') actions = `${sibs.length > 1 ? `<div class="qtyrow"><b>${avail} available</b><span class="stepper"><button id="qdec" aria-label="Fewer">−</button><b id="qv">1</b><button id="qinc" aria-label="More">+</button></span></div>` : ''}<div class="row tight"><button class="btn" id="buy">Buy now · ${bnd(l.price)}</button><button class="btn sec" id="cart">${sibs.some(inCart) ? `✓ In cart${sibs.filter(inCart).length > 1 ? ' (' + sibs.filter(inCart).length + ')' : ''} · Remove` : '🛒 Add to cart'}</button></div>
       <p class="muted">Nothing is charged on this site. Buying puts the card on hold for you so nobody else can buy it. You and the seller then arrange payment and meet-up on WhatsApp.</p>`;
     else if (live && !isSeller) actions = l.current_bidder === uid
       ? `<div class="notice ok">You are the highest bidder.</div>`
@@ -79,8 +89,18 @@ export async function viewListing($app, id, setUnsub) {
     const on = (sel, fn) => { const el = $app.querySelector('#' + sel); if (el) el.onclick = guard(fn); };
     on('login', signIn);
     on('rate', async () => { if (await rateSheet(id, isSeller ? 'buyer' : 'seller')) draw(); });
-    on('cart', async () => { if (inCart(id)) { removeFromCart(id); toast('Removed from cart'); } else { addToCart(id); toast('Added to cart'); } draw(); });
-    on('buy', async () => { if (!(await confirmSheet('Buy this card?', 'The card is put on hold for you, so nobody else can buy it. You then arrange payment and meet-up with the seller on WhatsApp.', 'Buy now'))) return; await rpc('buy_now', { p_listing: id }); toast('This card is now on hold for you. Contact the seller on WhatsApp.'); draw(); });
+    const setQty = (n) => { qty = Math.max(1, Math.min(sibs.length, n)); const v = $app.querySelector('#qv'); if (v) v.textContent = qty; const b = $app.querySelector('#buy'); if (b) b.textContent = `Buy ${qty > 1 ? qty + ' × ' : ''}now · ${bnd(Number(l.price) * qty)}`; };
+    on('qdec', async () => setQty(qty - 1)); on('qinc', async () => setQty(qty + 1));
+    on('cart', async () => { if (sibs.some(inCart)) { sibs.forEach(removeFromCart); toast('Removed from cart'); } else { sibs.slice(0, qty).forEach(addToCart); toast(qty > 1 ? `${qty} added to cart` : 'Added to cart'); } draw(); });
+    on('buy', async () => {
+      const n = qty;
+      if (!(await confirmSheet(n > 1 ? `Buy ${n} cards?` : 'Buy this card?', `${n > 1 ? 'The cards are' : 'The card is'} put on hold for you, so nobody else can buy ${n > 1 ? 'them' : 'it'}. You then arrange payment and meet-up with the seller on WhatsApp.${n > 1 ? ' Total ' + bnd(Number(l.price) * n) + '.' : ''}`, n > 1 ? `Buy ${n}` : 'Buy now'))) return;
+      let ok = 0, lastErr = null;
+      for (const sid of sibs) { if (ok >= n) break; try { await rpc('buy_now', { p_listing: sid }); ok++; } catch (e) { lastErr = e; } }   // skips a copy someone else just took
+      if (!ok) throw lastErr || new Error('Could not buy');
+      toast(ok < n ? `${ok} of ${n} were still available and are now on hold for you. Contact the seller on WhatsApp.` : n > 1 ? `${n} cards are now on hold for you. Contact the seller on WhatsApp.` : 'This card is now on hold for you. Contact the seller on WhatsApp.');
+      draw();
+    });
     on('bid', async () => { await rpc('place_bid', { p_listing: id, p_amount: Number($app.querySelector('#amt').value) }); toast('Bid placed'); draw(); });
     on('cancel', async () => { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); draw(); });
     on('sold', async () => { const r = await soldSheet(l); if (!r) return; await rpc('mark_sold', { p_listing: id, p_agreed_price: r.price }); toast('Marked as sold. You can now inform the buyer and send the receipt.'); draw(); });

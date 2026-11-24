@@ -1,6 +1,7 @@
 import { sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
 import { openShareSheet } from './shared.js';
 import { openListAll } from './listall.js';
+import { cardFilter } from './exploreSets.js';
 
 export async function viewInventory($app) {
   if (!state.user) { $app.innerHTML = `<h1>Inventory</h1>${needLogin('track your collection')}`; return bindLogin($app); }
@@ -13,6 +14,7 @@ export async function viewInventory($app) {
 
   const f = JSON.parse(sessionStorage.getItem('invf') || '{"q":"","set":"","sort":"new"}');
   const view = localStorage.getItem('view_inv') || 'list';
+  const cf = cardFilter('ivfx', cat, () => draw());
   const sel = new Set(); let shown = [];   // ticked cards, and the refs on screen
   const updSel = () => {
     const b = $app.querySelector('#listsel'); if (!b) return;
@@ -24,13 +26,14 @@ export async function viewInventory($app) {
     const st = invStats();
     let rows = st.rows.filter((r) => (!f.set || r.c.set === f.set) && (!f.q || (r.c.code + ' ' + r.c.name + ' ' + r.c.jp).toLowerCase().includes(f.q.toLowerCase())));
     const sorters = { new: (a, b) => b.t - a.t || a.c.code.localeCompare(b.c.code), value: (a, b) => b.v - a.v, code: (a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref), qty: (a, b) => b.q - a.q, name: (a, b) => a.c.name.localeCompare(b.c.name) };
+    if (cf.on()) { const okf = cf.pass(new Set(rows.map((r) => r.c.ref))); rows = rows.filter((r) => okf.has(r.c.ref)); }
     rows.sort(sorters[f.sort] || sorters.value);
     shown = rows.map((r) => r.c.ref);
     { const have = new Set(st.rows.map((r) => r.c.ref)); for (const r of [...sel]) if (!have.has(r)) sel.delete(r); }
     const sets = [...new Set(st.rows.map((r) => r.c.set))];
     $app.innerHTML = `<div class="head"><h1>Inventory</h1><div class="row tight"><button class="btn sec" id="share">🔗 Share</button><button class="btn sec" id="vm">${view === 'list' ? '▦ Grid' : '☰ List'}</button><button class="btn" id="add">+ Add card</button><a class="btn sec" href="#/scan">📷 Scan</a></div></div>
       <div class="hero small"><div class="muted">Value</div><div class="big-num">${bnd(st.value)}</div><div class="muted">${st.count} cards · ${st.unique} unique</div></div>
-      ${st.unique ? '<div class="invact"><button class="btn" id="listall">🏷 List all</button><button class="btn sec" id="listsel" disabled>🏷 Selected (0)</button><button class="btn sec" id="selall">Select all</button></div>' : ''}
+      ${st.unique ? '<div class="invact"><button class="btn" id="listall">🏷 List all</button><button class="btn sec" id="listsel" disabled>🏷 Selected (0)</button><button class="btn sec" id="selall">Select all</button><button class="btn sec" id="invf"></button></div>' : ''}
       <div class="panel"><div class="row"><input id="q" placeholder="Search your cards" value="${esc(f.q)}">
         <select id="set"><option value="">All sets</option>${sets.map((s) => `<option value="${s}" ${f.set === s ? 'selected' : ''}>${esc(s.toUpperCase() + ' · ' + setName(s))}</option>`).join('')}</select>
         <select id="sort">${[['new', 'Newest added'], ['value', 'Value'], ['code', 'Card code'], ['qty', 'Quantity'], ['name', 'Name']].map(([k, l]) => `<option value="${k}" ${f.sort === k ? 'selected' : ''}>Sort: ${l}</option>`).join('')}</select></div></div>
@@ -59,6 +62,8 @@ export async function viewInventory($app) {
     const upd = () => { f.q = $('#q').value; f.set = $('#set').value; f.sort = $('#sort').value; sessionStorage.setItem('invf', JSON.stringify(f)); };
     $('#q').oninput = () => { upd(); clearTimeout(bind.t); bind.t = setTimeout(() => { draw(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); };
     $('#set').onchange = () => { upd(); draw(); }; $('#sort').onchange = () => { upd(); draw(); };
+    const ifb = $('#invf'); if (ifb) { ifb.textContent = cf.label(); ifb.className = 'btn ' + (cf.on() ? '' : 'sec'); }
+    if (ifb) ifb.onclick = () => cf.open(() => { const all = invStats().rows; const ok = cf.pass(new Set(all.map((r) => r.c.ref))); return all.filter((r) => !cf.on() || ok.has(r.c.ref)).length; });
     const la = $('#listall'); if (la) la.onclick = guard(() => openListAll());
     const ls = $('#listsel'); if (ls) ls.onclick = guard(() => openListAll([...sel]));
     const sa = $('#selall'); if (sa) sa.onclick = () => { if (shown.length && shown.every((r) => sel.has(r))) shown.forEach((r) => sel.delete(r)); else shown.forEach((r) => sel.add(r)); draw(); };
@@ -82,5 +87,6 @@ export async function viewInventory($app) {
       })));
     });
   }
+  await cf.ensure();
   draw();
 }

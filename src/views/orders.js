@@ -1,4 +1,5 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, rateSheet } from '../lib.js';
+import { cardFilter } from './exploreSets.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
@@ -21,9 +22,9 @@ export async function viewOrders($app, opts = {}) {
   const uid = state.user.id;
   const only = opts.only || null;                       // 'selling' = the My listings page
   const tab = only || sessionStorage.getItem('otab') || 'buying';
-  $app.innerHTML = `<div class="head"><h1>${only ? 'My listings' : 'Orders'}</h1><button class="btn sec" id="rf">↻</button></div>
+  $app.innerHTML = `<div class="head"><h1>${only ? 'My listings' : 'Orders'}</h1><div class="row tight"><button class="btn sec" id="ofb">⚙ Filters</button><button class="btn sec" id="rf">↻</button></div></div>
     ${state.me?.strikes ? `<div class="notice err">You have ${state.me.strikes} strike(s). At 3 you are blocked from bidding, buying and listing.</div>` : ''}
- ${only ? '<p><a class="btn" href="#/sell">+ New listing</a> <a class="btn sec" href="#/orders">Sold history</a></p>' : ''}
+ ${only ? '<p><a class="btn" href="#/sell">+ New listing</a></p>' : ''}
     <div class="seg" ${only ? 'style="display:none"' : ''}><a data-t="buying" class="${tab === 'buying' ? 'on' : ''}">Buying</a><a data-t="selling" class="${tab === 'selling' ? 'on' : ''}">Selling</a><a data-t="sold" class="${tab === 'sold' ? 'on' : ''}">Sold history</a></div>
     <div id="body"><div class="loading">Loading…</div></div>`;
   $app.querySelectorAll('.seg a').forEach((a) => (a.onclick = () => { sessionStorage.setItem('otab', a.dataset.t); viewOrders($app); }));
@@ -121,6 +122,18 @@ export async function viewOrders($app, opts = {}) {
     body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); };
   }
   wire(() => viewOrders($app, opts));
+  // Filters: hide the cards whose listing does not match (same sheet as Explore)
+  const cf = cardFilter('ofx', state.cat, () => applyF());
+  const refsOnPage = () => new Set([...body.querySelectorAll('.order')].map((o) => LST.get(o.dataset.id)?.card_ref).filter(Boolean));
+  const applyF = () => {
+    const ok = cf.on() ? cf.pass(refsOnPage()) : null;
+    body.querySelectorAll('.order').forEach((o) => o.classList.toggle('fhide', !!ok && !ok.has(LST.get(o.dataset.id)?.card_ref)));
+    const b = $app.querySelector('#ofb'); b.textContent = cf.label(); b.className = 'btn ' + (cf.on() ? '' : 'sec');
+    let n = body.querySelector('.fnone'); const shown = body.querySelectorAll('.order:not(.fhide)').length;
+    if (ok && !shown) { if (!n) { n = document.createElement('p'); n.className = 'muted fnone'; n.textContent = 'Nothing matches these filters.'; body.prepend(n); } } else n?.remove();
+  };
+  $app.querySelector('#ofb').onclick = () => cf.open(() => { const ok = cf.pass(refsOnPage()); return [...body.querySelectorAll('.order')].filter((o) => !cf.on() || ok.has(LST.get(o.dataset.id)?.card_ref)).length; });
+  await cf.ensure(); applyF();
   body.querySelectorAll('[data-rp]').forEach((b) => (b.onclick = guard(async () => {
     const role = b.dataset.role, per = body.querySelector('#rp-per').value;
     const { data } = await sb.from('listings').select(sel).eq(role === 'sell' ? 'seller_id' : 'buyer_id', uid).eq('status', 'sold').limit(2000);
