@@ -358,3 +358,8 @@ img.xs.ph { width:36px; height:50px; border-radius:4px; object-fit:cover; flex:0
 .inv-row.shr .shact{margin-top:.3rem}
 .inv-row.shr .shact .btn{display:inline-block;white-space:nowrap;padding:.25rem .7rem;font-size:.78rem}
 .tile .b>a.btn.sm-btn{display:block;text-align:center;white-space:normal;line-height:1.2;padding:.3rem .4rem;font-size:.72rem;margin-top:.3rem}
+
+.ubar{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem;margin-top:.35rem}
+.ubar .usel{margin:0;font-size:.8rem}
+.ubar .uqty{width:4.2rem;padding:.3rem .5rem;border-radius:8px;font-size:.85rem;text-align:center}
+.ubar .btn.sm-btn{padding:.3rem .8rem;font-size:.8rem}
