@@ -24,6 +24,7 @@ await db.exec(readFileSync(new URL('../09_agreed_price.sql', import.meta.url), '
 await db.exec(readFileSync(new URL('../14_ratings_tags.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../15_moderation.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../16_bulk_unlist.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../17_shared_market.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -346,6 +347,16 @@ ok('new link differs after re-share', (await as(seller, `select share_inventory(
   const before = (await admin(`select count(*)::int n from listings where seller_id = $1 and status = 'active'`, [seller])).rows[0].n;
   ok('unlist all cancels all my active listings, not others\'', (await as(seller, `select cancel_my_listings(null) n`)).rows[0].n === before && (await admin(`select status from listings where id = $1`, [o])).rows[0].status === 'active');
   ok('unlist needs sign-in', await fails(null, `select cancel_my_listings(null)`, [], 'Sign in'));
+}
+// --- shared collection: marketplace badges + contact
+{
+  const id = await lst(seller, { type: 'buy_now', price: 3 });
+  const ref = (await admin(`select card_ref from listings where id = $1`, [id])).rows[0].card_ref;
+  const tok = (await as(seller, `select share_inventory() t`)).rows[0].t;
+  const j = (await as(null, `select get_shared_inventory($1) j`, [tok])).rows[0].j;
+  ok('shared page lists the owner\'s marketplace cards', j.listed && j.listed[ref] && j.listed[ref].n >= 1 && !!j.owner_id);
+  ok('shared contact needs sign-in', await fails(null, `select * from shared_contact($1)`, [tok], 'Sign in'));
+  ok('shared contact rejects a bad link', await fails(buyer2, `select * from shared_contact($1)`, ['nope'], 'not valid'));
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

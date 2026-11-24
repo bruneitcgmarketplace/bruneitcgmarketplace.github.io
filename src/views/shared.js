@@ -1,3 +1,4 @@
+import { waUrl } from '../receipt.js';
 import { sb, state, esc, bnd, toast, guard, sheet, loadCatalog, cardImg, refBnd, enlarge, confirmSheet } from '../lib.js';
 
 export const shareUrl = (token) => `${location.origin}${location.pathname}#/shared/${token}`;
@@ -45,13 +46,33 @@ export async function viewShared($app, token) {
   const cat = await loadCatalog();
   const { data, error } = await sb.rpc('get_shared_inventory', { p_token: token || '' });
   if (error) { $app.innerHTML = `<div class="panel center"><h1>Collection not available</h1><p class="muted">${esc(error.message)}</p><a class="btn" href="#/">Go to Home</a></div>`; return; }
-  const rows = (data.items || []).map((i) => ({ c: cat.byRef.get(i.card_ref), q: i.qty })).filter((r) => r.c);
+  const listed = data.listed || {};
+  const rows = (data.items || []).map((i) => ({ c: cat.byRef.get(i.card_ref), q: i.qty, l: listed[i.card_ref] })).filter((r) => r.c);
   rows.sort((a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref));
   const count = rows.reduce((s, r) => s + r.q, 0), value = rows.reduce((s, r) => s + r.q * refBnd(r.c), 0);
   const mine = state.user && state.me && state.me.display_name === data.owner;
   $app.innerHTML = `<div class="head"><h1>${esc(data.owner)}’s collection</h1></div>
     <div class="hero small"><div class="muted">Shared collection${mine ? ' (yours)' : ''}</div><div class="big-num">${count} cards</div><div class="muted">${rows.length} unique · est. ${bnd(value)}</div></div>
-    ${rows.length ? `<div class="grid">${rows.map(({ c, q }) => `<div class="tile" data-ref="${esc(c.ref)}"><div data-zoom>${cardImg(c)}</div><div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity)}</div><div class="nm">${esc(c.name)}</div><div class="row tight between"><span class="price">${c.jpy ? bnd(refBnd(c)) : ''}</span><b>×${q}</b></div></div></div>`).join('')}</div>` : '<div class="panel center"><p class="muted">This collection is empty.</p></div>'}`;
+    ${rows.length ? `<div class="grid">${rows.map(({ c, q, l }) => `<div class="tile" data-ref="${esc(c.ref)}"><div data-zoom>${cardImg(c)}</div><div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity)}</div><div class="nm">${esc(c.name)}</div><div class="row tight between"><span class="price">${c.jpy ? bnd(refBnd(c)) : ''}</span><b>×${q}</b></div>${l ? `<a class="btn sm-btn" href="#/listing/${l.id}">On Marketplace · ${bnd(l.price)}${l.n > 1 ? ' · ' + l.n + ' avail' : ''}</a>` : mine ? '' : `<label class="usel"><input type="checkbox" data-pick> Select</label>`}</div></div>`).join('')}</div>${rows.some((r) => !r.l) && !mine ? '<div class="pickbar"><button class="btn sec" id="pk-all">Select all not listed</button><button class="btn" id="pk-go" disabled>Contact collector (0)</button></div>' : ''}` : '<div class="panel center"><p class="muted">This collection is empty.</p></div>'}`;
+  {
+    const boxes = () => [...$app.querySelectorAll('input[data-pick]')];
+    const chosen = () => boxes().filter((b) => b.checked).map((b) => rows.find((r) => r.c.ref === b.closest('[data-ref]').dataset.ref));
+    const go = $app.querySelector('#pk-go'), all = $app.querySelector('#pk-all');
+    const upd = () => { if (!go) return; const n = chosen().length; go.textContent = `Contact collector (${n})`; go.disabled = !n; all.textContent = boxes().every((b) => b.checked) ? 'Clear' : 'Select all not listed'; };
+    boxes().forEach((b) => (b.onchange = upd));
+    if (all) all.onclick = () => { const on = !boxes().every((b) => b.checked); boxes().forEach((b) => (b.checked = on)); upd(); };
+    if (go) go.onclick = guard(async () => {
+      if (!state.user) { toast('Sign in to contact the collector'); location.hash = '#/account'; return; }
+      const pick = chosen(); if (!pick.length) return;
+      const { data: ct, error: ce } = await sb.rpc('shared_contact', { p_token: token });
+      if (ce) throw new Error(ce.message);
+      const c0 = Array.isArray(ct) ? ct[0] : ct;
+      const lines = pick.slice(0, 40).map((r) => `• ${r.c.code} ${r.c.rarity} ${r.c.name}`);
+      const text = `Hi ${c0.display_name}, I'm interested in ${pick.length === 1 ? 'this card' : 'these cards'} from your collection on Brunei One Piece TCG. Are they available?\n${lines.join('\n')}${pick.length > 40 ? `\n…and ${pick.length - 40} more` : ''}\n\n${location.href}`;
+      const s = sheet(`<h2>Contact ${esc(c0.display_name)}</h2><textarea id="pk-t" rows="9" style="width:100%">${esc(text)}</textarea><div class="row tight" style="margin-top:.6rem"><a class="btn" id="pk-wa" target="_blank" rel="noopener">Open WhatsApp</a></div>`);
+      const ta = s.el.querySelector('#pk-t'), wa = s.el.querySelector('#pk-wa'); const sync = () => { wa.href = waUrl(c0.whatsapp, ta.value); }; ta.oninput = sync; sync();
+    });
+  }
   $app.querySelectorAll('[data-zoom]').forEach((el) => { el.onclick = () => enlarge(cat.byRef.get(el.closest('[data-ref]').dataset.ref)); });
 }
 
