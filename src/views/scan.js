@@ -1,4 +1,4 @@
-import { state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, needLogin, bindLogin } from '../lib.js';
+import { state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, needLogin, bindLogin, artShort } from '../lib.js';
 import * as scanner from '../scanner.js';
 import { loadLocator, setBuffer, setSource, freeBuffer, findOne, findMany, makeTracker } from '../scanner.js';
 window.__scanner = scanner; // test hook
@@ -45,7 +45,7 @@ export async function viewScan($app) {
     el.innerHTML = `<div class="panel nopad">${session.map((s, i) => { const c = cat.byRef.get(s.ref); const variants = cat.byCode.get(s.code);
       return `<div class="inv-row"><input type="checkbox" data-i="${i}" data-k="on" ${s.on ? 'checked' : ''} style="width:auto">
         <div class="img">${cardImg(c, 'sm')}</div><div class="grow"><b>${esc(s.code)}</b> ${esc(c.rarity)}<div class="muted nm">${esc(c.name)}</div>
-        ${variants.length > 1 ? `<select data-i="${i}" data-k="ref" style="margin-top:.2rem">${variants.map((v) => `<option value="${esc(v.ref)}" ${v.ref === s.ref ? 'selected' : ''}>${esc(v.rarity)} ${v.parallel ? '(alt art)' : ''} ${v.jpy ? bnd(refBnd(v)) : ''}</option>`).join('')}</select>` : ''}</div>
+        ${variants.length > 1 ? `<select data-i="${i}" data-k="ref" style="margin-top:.2rem">${variants.map((v) => `<option value="${esc(v.ref)}" ${v.ref === s.ref ? 'selected' : ''}>${esc(v.rarity)} ${artShort(v) ? '(' + artShort(v) + ')' : ''} ${v.jpy ? bnd(refBnd(v)) : ''}</option>`).join('')}</select>` : ''}</div>
         <div class="stepper"><button data-i="${i}" data-k="dec">−</button><b>${s.qty}</b><button data-i="${i}" data-k="inc">+</button></div></div>`; }).join('')}</div>
       <div class="row tight"><button class="btn" id="addsel">Add ${total} selected to inventory</button><button class="btn sec" id="all">Select all</button><button class="btn sec" id="disc">Discard</button></div>`;
     el.querySelectorAll('[data-k]').forEach((x) => {
