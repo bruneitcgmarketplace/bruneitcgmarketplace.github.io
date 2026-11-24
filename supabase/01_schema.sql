@@ -181,9 +181,7 @@ begin
   if coalesce(p->>'card_code','') = '' or coalesce(p->>'card_name','') = '' then
     raise exception 'Pick a card first';
   end if;
-  if (select count(*) from listings where seller_id = me and status = 'active') >= 100 then
-    raise exception 'Too many active listings';
-  end if;
+  -- no cap on active listings (removed 2026-11-24)
 
   if t = 'buy_now' then
     insert into listings(seller_id, type, card_ref, card_code, card_name, rarity, set_id, catalog_image,

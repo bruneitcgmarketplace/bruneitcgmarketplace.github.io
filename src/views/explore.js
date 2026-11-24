@@ -15,11 +15,13 @@ export async function viewMarket($app, setUnsub) {
   const inv = state.inv || new Map();
   const mf = Object.assign(FRESH(), JSON.parse(sessionStorage.getItem('mf') || '{}'), { q: '', sale: false });   // same filters as Explore
   let pool = [];   // listings of the current tab, before filters
+  let sel = sessionStorage.getItem('msel') || '';   // chosen seller id ('' = all)
   $app.innerHTML = `<h1>Marketplace</h1><p class="muted">Cards for sale by collectors in Brunei. Buy now or bid in auctions.</p>
     <div class="seg" id="mt"><a data-t="buy_now">Buy now</a><a data-t="auction">Auction</a></div>
     <div class="panel"><div class="row">
       <input id="q" placeholder="Search card code or name, e.g. OP01-001" value="${esc(f.q || '')}">
-      <select id="sort"></select><button class="btn sec" id="fbtn">⚙ Filters</button></div></div>
+      <select id="sort"></select><button class="btn sec" id="fbtn">⚙ Filters</button></div>
+      <div class="row" style="margin-top:.5rem"><select id="seller" aria-label="Seller"></select></div></div>
     <div id="list" class="grid"><p class="muted">Loading…</p></div>`;
   const setTab = (pref) => {
     $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));
@@ -33,27 +35,38 @@ export async function viewMarket($app, setUnsub) {
   btnLabel();
   const ensureData = async () => { if (needsInfo(mf)) await loadInfo(); };
   const matchRefs = (rows) => { const cards = [...new Map(rows.map((l) => [l.card_ref, cat.byRef.get(l.card_ref)]).filter(([, c]) => c)).values()]; return new Set(matchSync(mf, cards, inv).map((c) => c.ref)); };
+  // only sellers who have something for sale in this tab
+  const fillSellers = () => {
+    const m = new Map();
+    for (const l of pool) { const e = m.get(l.seller_id) || { name: l.seller?.display_name || 'Seller', n: 0 }; e.n++; m.set(l.seller_id, e); }
+    if (sel && !m.has(sel)) sel = '';
+    const s = $app.querySelector('#seller');
+    s.innerHTML = `<option value="">All sellers (${m.size})</option>` + [...m].sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([id, e]) => `<option value="${esc(id)}">${esc(e.name)} (${e.n})</option>`).join('');
+    s.value = sel;
+  };
+  const base = () => (sel ? pool.filter((l) => l.seller_id === sel) : pool);
+  $app.querySelector('#seller').onchange = (ev) => { sel = ev.target.value; sessionStorage.setItem('msel', sel); paint(); };
   function paint() {
     const el = $app.querySelector('#list'); if (!el) return;
     const sort = $app.querySelector('#sort').value;
-    let rows = pool;
+    let rows = base();
     if (activeCount(mf)) { const ok = matchRefs(rows); rows = rows.filter((l) => ok.has(l.card_ref)); }
     rows = [...rows];
     if (sort === 'low') rows.sort((a, b) => listingPrice(a) - listingPrice(b)); else if (sort === 'high') rows.sort((a, b) => listingPrice(b) - listingPrice(a));
     rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
     const more = rows.length > 200; rows = rows.slice(0, 200);
     el.innerHTML = rows.length ? rows.map(tile).join('') + (more ? '<p class="muted" style="grid-column:1/-1">Showing the first 200. Narrow the filters to see the rest.</p>' : '')
-      : `<p class="muted">${activeCount(mf) ? 'Nothing matches these filters.' : type === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} ${activeCount(mf) ? '<a href="#" id="fclr">Clear filters</a>' : '<a href="#/sell">Sell a card</a>'}</p>`;
-    const c = el.querySelector('#fclr'); if (c) c.onclick = (ev) => { ev.preventDefault(); Object.assign(mf, FRESH(), { q: '' }); sessionStorage.setItem('mf', JSON.stringify(mf)); btnLabel(); paint(); };
+      : `<p class="muted">${activeCount(mf) || sel ? 'Nothing matches these filters.' : type === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} ${activeCount(mf) || sel ? '<a href="#" id="fclr">Clear filters</a>' : '<a href="#/sell">Sell a card</a>'}</p>`;
+    const c = el.querySelector('#fclr'); if (c) c.onclick = (ev) => { ev.preventDefault(); Object.assign(mf, FRESH(), { q: '' }); sel = ''; sessionStorage.setItem('mf', JSON.stringify(mf)); sessionStorage.setItem('msel', ''); $app.querySelector('#seller').value = ''; btnLabel(); paint(); };
   }
   fbtn.onclick = () => filterSheet({ f: mf, cat, ensureData, market: true, unit: 'listing',
-    count: () => { if (!activeCount(mf)) return pool.length; const ok = matchRefs(pool); return pool.filter((l) => ok.has(l.card_ref)).length; },
+    count: () => { const b = base(); if (!activeCount(mf)) return b.length; const ok = matchRefs(b); return b.filter((l) => ok.has(l.card_ref)).length; },
     done: () => { sessionStorage.setItem('mf', JSON.stringify(mf)); btnLabel(); paint(); } });
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;
     sessionStorage.setItem('filters', JSON.stringify({ q, type: t, sort }));
-    let req = sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').limit(1000);
+    let req = sb.from('listings').select('*, seller:profiles!listings_seller_id_fkey(display_name)').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').limit(1000);
     req = req.eq('type', t);
     if (q) {
       const s = q.replace(/[%,()]/g, ' ');
@@ -66,6 +79,7 @@ export async function viewMarket($app, setUnsub) {
     const el = $app.querySelector('#list'); if (!el) return;
     if (error) return (el.innerHTML = `<div class="notice err">${esc(error.message)}</div>`);
     pool = [...data];
+    fillSellers();
     await ensureData();
     paint();
   };
