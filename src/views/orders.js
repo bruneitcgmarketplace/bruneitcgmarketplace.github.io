@@ -32,13 +32,20 @@ export async function viewOrders($app, opts = {}) {
   const card = async (l, role) => {
     const c = state.cat.byRef.get(l.card_ref);
     const price = listingPrice(l);
-    let extra = '';
+    let extra = '', ct = null;
     if (l.status === 'reserved') {
-      const ct = await contactOf(l);
+      ct = await contactOf(l);
       extra += `<div class="notice">${l.type === 'auction' ? 'Auction won' : 'Reserved'}. ${role === 'sell' ? 'Contact the buyer to settle.' : 'Contact the seller to settle.'}
         ${ct ? `<br><a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">💬 WhatsApp ${esc(ct.display_name)} (+${esc(ct.whatsapp)})</a>` : ''}</div>`;
     }
     const acts = [];
+    // Prefilled WhatsApp message for the other party of a reserved deal (buyer informs seller / seller asks buyer to pay), with the listing link.
+    const link = `${location.origin}${location.pathname}#/listing/${l.id}`;
+    const item = `${l.card_code} ${c?.name || l.card_name}${l.condition ? ' (' + l.condition + ')' : ''} for ${bnd(price)}`;
+    const msg = role === 'sell'
+      ? `Hi ${ct?.display_name || ''}, this is ${l.seller?.display_name || 'the seller'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'You won the auction for' : 'Your order is confirmed:'} ${item}.\nPlease make the payment and send me the receipt here.\nOrder link: ${link}`
+      : `Hi ${ct?.display_name || ''}, this is ${l.buyer?.display_name || 'a buyer'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'I won the auction for' : 'I would like to buy'} ${item}.\nPlease confirm and let me know how to pay.\nListing link: ${link}`;
+    const waBtn = ct && l.status === 'reserved' ? `<a class="btn ${role === 'sell' ? 'ok' : ''}" target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}?text=${encodeURIComponent(msg)}">💬 ${role === 'sell' ? 'Ask buyer to pay' : 'Inform seller'}</a>` : '';
     if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Mark as sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
     if (role === 'sell' && l.status === 'active' && l.bid_count === 0) acts.push(['cancel', 'Cancel listing', 'bad']);
     if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
@@ -48,7 +55,7 @@ export async function viewOrders($app, opts = {}) {
         <div><span class="price">${bnd(price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
         <div class="muted">${role === 'sell' ? (l.buyer ? 'Buyer: ' + esc(l.buyer.display_name) : '') : 'Seller: ' + esc(l.seller?.display_name)} · ${new Date(l.created_at).toLocaleDateString()}</div>
-        ${extra}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
+        ${extra}<div class="row tight">${waBtn}${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
   };
   const wire = (reload) => body.querySelectorAll('.order').forEach((el) => {
     const id = el.dataset.id;
