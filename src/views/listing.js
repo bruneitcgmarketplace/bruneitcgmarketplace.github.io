@@ -1,11 +1,12 @@
 import { addToCart, removeFromCart, inCart } from '../cart.js';
+import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, shareReceipt, canShareFiles } from '../receipt.js';
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
   const cat = await loadCatalog();
   const draw = async () => {
     const { data: l, error } = await sb.from('listings')
-      .select('*, seller:profiles!listings_seller_id_fkey(display_name), bidder:profiles!listings_current_bidder_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)').eq('id', id).maybeSingle();
+      .select('*, seller:profiles!listings_seller_id_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name), bidder:profiles!listings_current_bidder_fkey(display_name)').eq('id', id).maybeSingle();
     if (error || !l) { $app.innerHTML = `<div class="notice err">${esc(error?.message || 'Listing not found')}</div>`; return; }
     const { data: bids } = l.type === 'auction'
       ? await sb.from('bids').select('amount,created_at,bidder:profiles!bids_bidder_id_fkey(display_name)').eq('listing_id', id).order('amount', { ascending: false }).limit(20)
@@ -16,6 +17,7 @@ export async function viewListing($app, id, setUnsub) {
     const small = (u) => upImg(u, '250_350'), sharp = (u) => upImg(u, 'front'), thumb = (u) => upImg(u, '100_140');
     const live = l.status === 'active' && (l.type === 'buy_now' || new Date(l.ends_at) > new Date());
     const held = l.status === 'reserved' && l.type === 'buy_now' && !isSeller && !isBuyer;
+    const rd = receiptData(l, c?.name || l.card_name);
     const minBid = l.current_bid == null ? Number(l.start_price) : Number(l.current_bid) + Number(l.bid_increment);
     const shown = l.type === 'auction' ? Number(l.current_bid ?? l.start_price) : Number(l.price);
 
@@ -32,23 +34,19 @@ export async function viewListing($app, id, setUnsub) {
 
     if (l.status === 'reserved' && (isSeller || isBuyer)) {
       let ct = null; try { ct = (await rpc('get_contact', { p_listing: id }))?.[0]; } catch {}
-      // Prefilled WhatsApp message (buyer informs seller / seller asks buyer to pay) with the listing link; same wording as the Orders page.
-      const waBtn = (ct) => {
-        const link = `${location.origin}${location.pathname}#/listing/${l.id}`;
-        const item = `${l.card_code} ${cat.byRef.get(l.card_ref)?.name || l.card_name}${l.condition ? ' (' + l.condition + ')' : ''} for ${bnd(shown)}`;
-        const msg = isSeller
-          ? `Hi ${ct.display_name || ''}, this is ${l.seller?.display_name || 'the seller'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'You won the auction for' : 'Your order is confirmed:'} ${item}.\nPlease make the payment and send me the receipt here.\nOrder link: ${link}`
-          : `Hi ${ct.display_name || ''}, this is ${l.buyer?.display_name || 'a buyer'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'I won the auction for' : 'I would like to buy'} ${item}.\nPlease confirm and let me know how to pay.\nListing link: ${link}`;
-        return `<p><a class="btn ${isSeller ? 'ok' : ''}" target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}?text=${encodeURIComponent(msg)}">💬 ${isSeller ? 'Ask buyer to pay' : 'Inform seller'}</a></p>`;
-      };
-      actions = `<div class="notice">${l.type === 'auction' ? 'Auction won' : isSeller ? 'On hold: a buyer clicked Buy now' : 'On hold for you'}. ${isSeller ? 'Contact the buyer on WhatsApp to settle, then mark it sold or release it.' : 'Contact the seller on WhatsApp to complete the purchase.'}</div>
-        ${ct ? `<p><b>${esc(ct.display_name)}</b> · <a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">WhatsApp +${esc(ct.whatsapp)}</a></p>${waBtn(ct)}` : ''}
-        ${isSeller ? `<div class="row tight"><button class="btn ok" id="sold">Mark as sold</button><button class="btn sec" id="release">Release</button><button class="btn bad" id="noshow">Release + strike buyer</button></div>`
-          : l.type === 'buy_now' ? `<button class="btn sec" id="unreserve">Cancel my reservation</button>` : ''}`;
+      actions = `<div class="notice">${l.type === 'auction' ? 'Auction won' : isSeller ? 'On hold: a buyer clicked Buy now' : 'On hold for you'}. ${isSeller ? 'Contact the buyer on WhatsApp to settle. After the meet-up and payment, tap Sold.' : 'Contact the seller on WhatsApp to complete the purchase.'}</div>
+        ${ct ? `<p><b>${esc(ct.display_name)}</b> · <a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">WhatsApp +${esc(ct.whatsapp)}</a></p>` : ''}
+        ${isSeller ? `<div class="row tight"><button class="btn ok" id="sold">Sold</button><button class="btn sec" id="release">Release</button><button class="btn bad" id="noshow">Release + strike buyer</button></div>`
+          : `${ct ? `<p><a class="btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformSeller(rd))}">💬 Inform seller on WhatsApp</a></p>` : ''}${l.type === 'buy_now' ? `<button class="btn sec" id="unreserve">Cancel my reservation</button>` : ''}`}`;
     } else if (held) actions = `<button class="btn held-btn" disabled>Buy now · On hold</button>
       <div class="holdbox"><b>This card is on hold.</b><br>Another buyer is completing this purchase, so it cannot be bought right now. If the deal does not go ahead, it goes back on sale. Check back soon.</div>`;
     else if (l.status === 'reserved') actions = `<div class="notice">Reserved by another buyer.</div>`;
-    else if (l.status === 'sold') actions = `<div class="notice">Sold.</div>`;
+    else if (l.status === 'sold' && (isSeller || isBuyer)) {
+      let ct = null; try { ct = (await rpc('get_contact', { p_listing: id }))?.[0]; } catch {}
+      actions = `<div class="notice ok">Sold. This deal is complete.</div>
+        <div class="row tight">${isSeller && ct ? `<a class="btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(rd))}">💬 Inform buyer on WhatsApp</a>` : ''}<button class="btn sec" id="rcpt">📄 Receipt (PDF)</button>${canShareFiles() ? '<button class="btn sec" id="rshare">Share receipt</button>' : ''}</div>
+        <p class="muted">Receipt no. ${esc(rd.no)}.${isSeller ? ' Tap Inform buyer to message them, then send the PDF receipt in the chat (Share receipt can send it straight from your phone).' : ''}</p>`;
+    } else if (l.status === 'sold') actions = `<div class="notice">Sold.</div>`;
     else if (l.status === 'ended') actions = `<div class="notice">Auction ended without a sale.</div>`;
     else if (l.status === 'cancelled') actions = `<div class="notice">Listing cancelled.</div>`;
 
@@ -80,10 +78,12 @@ export async function viewListing($app, id, setUnsub) {
     on('buy', async () => { if (!(await confirmSheet('Buy this card?', 'The card is put on hold for you, so nobody else can buy it. You then arrange payment and meet-up with the seller on WhatsApp.', 'Buy now'))) return; await rpc('buy_now', { p_listing: id }); toast('This card is now on hold for you. Contact the seller on WhatsApp.'); draw(); });
     on('bid', async () => { await rpc('place_bid', { p_listing: id, p_amount: Number($app.querySelector('#amt').value) }); toast('Bid placed'); draw(); });
     on('cancel', async () => { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); draw(); });
-    on('sold', async () => { await rpc('mark_sold', { p_listing: id }); toast('Marked as sold'); draw(); });
+    on('sold', async () => { if (!(await confirmSheet('Mark this card as sold?', 'Confirm you have met the buyer and been paid. This completes the deal and takes one copy off your inventory if you track it.', 'Sold'))) return; await rpc('mark_sold', { p_listing: id }); toast('Marked as sold. You can now inform the buyer and send the receipt.'); draw(); });
     on('release', async () => { await rpc('seller_release', { p_listing: id, p_no_show: false }); draw(); });
     on('noshow', async () => { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); draw(); });
     on('unreserve', async () => { await rpc('cancel_reservation', { p_listing: id }); draw(); });
+    on('rcpt', async () => { downloadReceipt(rd); });
+    on('rshare', async () => { try { await shareReceipt(rd); } catch (e) { if (e?.name !== 'AbortError') throw e; } });
     on('report', async () => {
       const reason = await promptSheet('Report listing', 'Why? (fake card, wrong price, scam…)', { multiline: true, okLabel: 'Send report' });
       if (!reason) return;

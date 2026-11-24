@@ -17,6 +17,7 @@ await db.exec(readFileSync(new URL('../03_inventory.sql', import.meta.url), 'utf
 await db.exec(readFileSync(new URL('../04_admin.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../05_share.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../07_hold_message.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../08_sold_at.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -83,6 +84,10 @@ ok('no-show adds strike', (await as(buyer2, `select strikes from private_profile
 await as(buyer, `select buy_now($1)`, [bn]);
 await as(seller, `select mark_sold($1)`, [bn]);
 ok('mark_sold works', (await as(buyer, `select status from listings where id=$1`, [bn])).rows[0].status === 'sold');
+ok('sold_at is stamped when marked sold', (await as(buyer, `select (sold_at is not null and sold_at > now() - interval '1 minute') ok from listings where id=$1`, [bn])).rows[0].ok);
+ok('sold listing: seller can still get the buyer contact', (await as(seller, `select * from get_contact($1)`, [bn])).rows[0]?.role === 'buyer');
+ok('sold listing: buyer can still get the seller contact', (await as(buyer, `select * from get_contact($1)`, [bn])).rows[0]?.role === 'seller');
+ok('sold listing: a third party gets no contact', (await as(buyer2, `select * from get_contact($1)`, [bn])).rows.length === 0);
 
 // --- auction
 const au = await lst(seller, { type: 'auction', start_price: 10, bid_increment: 2, duration_hours: 24 });

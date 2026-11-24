@@ -1,4 +1,5 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet } from '../lib.js';
+import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt } from '../receipt.js';
 
 const stChip = (l, uid, role) => {
   const m = {
@@ -35,33 +36,33 @@ export async function viewOrders($app, opts = {}) {
     let extra = '', ct = null;
     if (l.status === 'reserved') {
       ct = await contactOf(l);
-      extra += `<div class="notice">${l.type === 'auction' ? 'Auction won' : 'Reserved'}. ${role === 'sell' ? 'Contact the buyer to settle.' : 'Contact the seller to settle.'}
-        ${ct ? `<br><a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">💬 WhatsApp ${esc(ct.display_name)} (+${esc(ct.whatsapp)})</a>` : ''}</div>`;
+      const rd = receiptData(l, c?.name || l.card_name);
+      extra += `<div class="notice">${l.type === 'auction' ? 'Auction won' : role === 'sell' ? 'On hold: a buyer clicked Buy now' : 'On hold for you'}. ${role === 'sell' ? 'Contact the buyer on WhatsApp. After the meet-up and payment, tap Sold.' : 'Tell the seller you want to buy it.'}
+        ${ct ? `<br><a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, role === 'sell' ? `Hi ${ct.display_name}, thanks for buying ${rd.code} ${rd.name} (${rd.cond}). When and where can we meet?\nListing: ${rd.url}` : msgInformSeller(rd))}">💬 ${role === 'sell' ? 'WhatsApp buyer' : 'Inform seller on WhatsApp'}</a>` : ''}</div>`;
+    }
+    if (l.status === 'sold' && role === 'sell') {
+      const ct = await contactOf(l);
+      if (ct) extra += `<a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(receiptData(l, c?.name || l.card_name)))}">💬 Inform buyer on WhatsApp</a> `;
     }
     const acts = [];
-    // Prefilled WhatsApp message for the other party of a reserved deal (buyer informs seller / seller asks buyer to pay), with the listing link.
-    const link = `${location.origin}${location.pathname}#/listing/${l.id}`;
-    const item = `${l.card_code} ${c?.name || l.card_name}${l.condition ? ' (' + l.condition + ')' : ''} for ${bnd(price)}`;
-    const msg = role === 'sell'
-      ? `Hi ${ct?.display_name || ''}, this is ${l.seller?.display_name || 'the seller'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'You won the auction for' : 'Your order is confirmed:'} ${item}.\nPlease make the payment and send me the receipt here.\nOrder link: ${link}`
-      : `Hi ${ct?.display_name || ''}, this is ${l.buyer?.display_name || 'a buyer'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'I won the auction for' : 'I would like to buy'} ${item}.\nPlease confirm and let me know how to pay.\nListing link: ${link}`;
-    const waBtn = ct && l.status === 'reserved' ? `<a class="btn ${role === 'sell' ? 'ok' : ''}" target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}?text=${encodeURIComponent(msg)}">💬 ${role === 'sell' ? 'Ask buyer to pay' : 'Inform seller'}</a>` : '';
-    if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Mark as sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
+    if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
     if (role === 'sell' && l.status === 'active' && l.bid_count === 0) acts.push(['cancel', 'Cancel listing', 'bad']);
     if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
+    if (l.status === 'sold') acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
       <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${stChip(l, uid, role)}</div>
         <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
         <div><span class="price">${bnd(price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
         <div class="muted">${role === 'sell' ? (l.buyer ? 'Buyer: ' + esc(l.buyer.display_name) : '') : 'Seller: ' + esc(l.seller?.display_name)} · ${new Date(l.created_at).toLocaleDateString()}</div>
-        ${extra}<div class="row tight">${waBtn}${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
+        ${extra}<div class="row tight">${acts.map(([k, t, cls]) => `<button class="btn ${cls}" data-act="${k}">${t}</button>`).join('')}</div></div></div>`;
   };
   const wire = (reload) => body.querySelectorAll('.order').forEach((el) => {
     const id = el.dataset.id;
     el.querySelectorAll('[data-act]').forEach((b) => (b.onclick = guard(async () => {
       const a = b.dataset.act;
-      if (a === 'sold') await rpc('mark_sold', { p_listing: id });
+      if (a === 'sold') { if (!(await confirmSheet('Mark this card as sold?', 'Confirm you have met the buyer and been paid. This completes the deal.', 'Sold'))) return; await rpc('mark_sold', { p_listing: id }); }
+      if (a === 'receipt') { const { data: row } = await sb.from('listings').select(sel).eq('id', id).single(); downloadReceipt(receiptData(row, state.cat.byRef.get(row.card_ref)?.name || row.card_name)); return; }
       if (a === 'release') await rpc('seller_release', { p_listing: id, p_no_show: false });
       if (a === 'noshow') { if (!(await confirmSheet('Strike the buyer?', 'The buyer gets a strike for not completing the deal. At 3 strikes they are blocked.', 'Release + strike', true))) return; await rpc('seller_release', { p_listing: id, p_no_show: true }); }
       if (a === 'cancel') { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); }
@@ -92,7 +93,7 @@ export async function viewOrders($app, opts = {}) {
     const thisM = rows.filter((l) => l.created_at.startsWith(month)).reduce((a, l) => a + listingPrice(l), 0);
     body.innerHTML = `<div class="stats"><div class="stat"><b>${rows.length}</b><span>Sold</span></div><div class="stat"><b>${bnd(total)}</b><span>Total sales</span></div><div class="stat"><b>${bnd(thisM)}</b><span>This month (by listing date)</span></div></div>
       <input id="sq" placeholder="Search sold cards or buyer" style="margin:.6rem 0">
-      <div id="sl">${(await Promise.all(rows.map((l) => card(l, 'sell')))).join('') || '<p class="muted">Nothing sold yet. Sales appear here after you tap "Mark as sold".</p>'}</div>`;
+      <div id="sl">${(await Promise.all(rows.map((l) => card(l, 'sell')))).join('') || '<p class="muted">Nothing sold yet. Sales appear here after you tap "Sold".</p>'}</div>`;
     body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); };
   }
   wire(() => viewOrders($app, opts));
