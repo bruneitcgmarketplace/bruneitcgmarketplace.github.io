@@ -16,12 +16,12 @@ export async function viewMarket($app, setUnsub) {
   const mf = Object.assign(FRESH(), JSON.parse(sessionStorage.getItem('mf') || '{}'), { q: '', sale: false });   // same filters as Explore
   let pool = [];   // listings of the current tab, before filters
   let sel = sessionStorage.getItem('msel') || '';   // chosen seller id ('' = all)
-  $app.innerHTML = `<h1>Marketplace</h1><p class="muted">Cards for sale by collectors in Brunei. Buy now or bid in auctions.</p>
+  $app.innerHTML = `<h1 style="margin-bottom:.4rem">Marketplace</h1>
     <div class="seg" id="mt"><a data-t="buy_now">Buy now</a><a data-t="auction">Auction</a></div>
-    <div class="panel"><div class="row">
-      <input id="q" placeholder="Search card code or name, e.g. OP01-001" value="${esc(f.q || '')}">
-      <select id="sort"></select><button class="btn sec" id="fbtn">⚙ Filters</button></div>
-      <div class="row" style="margin-top:.5rem"><select id="seller" aria-label="Seller"></select></div></div>
+    <div class="mbar">
+      <input id="q" type="search" placeholder="Search code or name" value="${esc(f.q || '')}">
+      <button class="btn sec" id="fbtn">⚙ Filters</button>
+      <div class="two"><select id="sort" aria-label="Sort by"></select><select id="seller" aria-label="Seller"></select></div></div>
     <div id="list" class="grid"><p class="muted">Loading…</p></div>`;
   const setTab = (pref) => {
     $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));

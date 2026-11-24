@@ -270,3 +270,9 @@ img.xs.ph { width:36px; height:50px; border-radius:4px; object-fit:cover; flex:0
 .fc.on { background:linear-gradient(180deg,var(--red2),var(--red)); border-color:var(--red2); color:#fff; font-weight:700; }
 .fc[style*="--cc"] { border-left:4px solid var(--cc); }
 .fbar { position:sticky; bottom:-1.2rem; display:flex; gap:.6rem; padding:.8rem 0 .2rem; background:linear-gradient(180deg,transparent,var(--card) 30%); margin-top:1rem; }
+
+/* Marketplace toolbar: compact two-row layout */
+.mbar{display:grid;grid-template-columns:1fr auto;gap:.4rem;margin:.5rem 0 .7rem}
+.mbar .two{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.mbar input,.mbar select,.mbar .btn{height:2.5rem;min-height:0;margin:0;padding:.3rem .65rem;font-size:.9rem;width:100%;box-sizing:border-box}
+.mbar .btn{width:auto;white-space:nowrap}

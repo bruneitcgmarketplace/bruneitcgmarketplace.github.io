@@ -3,17 +3,19 @@ import { sb, state, esc, bnd, toast, rpc, loadMe, loadCatalog, loadInv, invStats
 
 const yuyuPrice = (c) => (c.jpy ? Math.round(refBnd(c) * 2) / 2 || 0.5 : 0);   // Yuyutei price in BND, to the nearest 0.5 (same as "Use this price" on the sell page)
 
-export async function openListAll() {
+export async function openListAll(refs = null) {   // refs = only these card versions (List selected); null = the whole collection
+  const pick = refs ? new Set(refs) : null;
   await loadCatalog(); await loadInv(true);
   const { data: mine } = await sb.from('listings').select('card_ref').eq('seller_id', state.user.id).in('status', ['active', 'reserved']).limit(5000);
   const listed = new Map(); for (const l of mine || []) listed.set(l.card_ref, (listed.get(l.card_ref) || 0) + 1);
-  const rows = invStats().rows.map(({ c, q }) => ({ c, avail: Math.max(0, q - (listed.get(c.ref) || 0)), have: q })).filter((r) => r.avail > 0);
-  const already = invStats().rows.reduce((s, r) => s + Math.min(r.q, listed.get(r.c.ref) || 0), 0);
-  if (!rows.length) { toast(already ? 'Everything in your collection is already listed' : 'Your collection is empty'); return; }
+  const mineRows = invStats().rows.filter((r) => !pick || pick.has(r.c.ref));
+  const rows = mineRows.map(({ c, q }) => ({ c, avail: Math.max(0, q - (listed.get(c.ref) || 0)), have: q })).filter((r) => r.avail > 0);
+  const already = mineRows.reduce((s, r) => s + Math.min(r.q, listed.get(r.c.ref) || 0), 0);
+  if (!rows.length) { toast(already ? (pick ? 'The selected cards are already listed' : 'Everything in your collection is already listed') : 'Your collection is empty'); return; }
   const needWa = !state.me?.whatsapp;
   const sh = sheet(`<div id="la">
-    <h2>List everything on the Marketplace</h2>
-    <p class="muted">Creates Buy now listings for your collection. Each copy is its own listing.</p>
+    <h2>${pick ? `List ${rows.length} selected card${rows.length === 1 ? '' : 's'} on the Marketplace` : 'List everything on the Marketplace'}</h2>
+    <p class="muted">Creates Buy now listings for ${pick ? 'the selected cards' : 'your collection'}. Each copy is its own listing.</p>
     <label>Price for every card (BND)</label>
     <input id="la-price" type="number" inputmode="decimal" min="0.5" step="0.5" placeholder="Leave empty to use each card's Yuyutei price">
     <label>Quantity to list per card (maximum)</label>
