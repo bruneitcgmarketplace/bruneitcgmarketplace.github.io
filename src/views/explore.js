@@ -51,15 +51,18 @@ export async function viewSet($app, id) {
   const { data: ls } = await sb.from('listings').select('card_code,type,price,current_bid,start_price').eq('status', 'active').in('card_code', [...new Set(set.cards.map((c) => c.code))].slice(0, 400));
   const forSale = new Map();
   for (const l of ls || []) { const o = forSale.get(l.card_code) || { n: 0, min: Infinity }; o.n++; o.min = Math.min(o.min, listingPrice(l)); forSale.set(l.card_code, o); }
-  const f = JSON.parse(sessionStorage.getItem('setf') || '{"q":"","alt":false,"own":"all","rar":""}');
+  const f = Object.assign({ q: '', alt: false, own: 'all', rar: '', sort: 'code' }, JSON.parse(sessionStorage.getItem('setf') || '{}'));
+  const SORT = { code: null, phigh: (a, b) => (b.jpy || -1) - (a.jpy || -1), plow: (a, b) => (a.jpy || 1e12) - (b.jpy || 1e12), name: (a, b) => a.name.localeCompare(b.name) };
   const rarities = [...new Set(set.cards.map((c) => c.rarity))];
   const draw = () => {
     const inv = state.inv || new Map();
     let cards = set.cards.filter((c) => (f.alt || c.def) && (!f.rar || c.rarity === f.rar)
       && (f.own === 'all' || (f.own === 'owned') === inv.has(c.ref)) && (!f.q || (c.code + ' ' + c.name + ' ' + c.jp).toLowerCase().includes(f.q.toLowerCase())));
+    if (SORT[f.sort]) cards = cards.slice().sort(SORT[f.sort]);
     const ownedCodes = new Set([...inv.keys()].map((r) => cat.byRef.get(r)).filter((c) => c?.set === id).map((c) => c.code)).size;
     $app.innerHTML = `<p><a href="#/explore">← All sets</a></p><h1>${esc(set.name)}</h1><p class="muted">${id.toUpperCase()} · ${set.count} cards${state.user ? ` · you own ${ownedCodes} (${Math.round((ownedCodes / set.count) * 100)}%)` : ''}</p>
       <div class="panel"><div class="row"><input id="q" placeholder="Search in set" value="${esc(f.q)}">
+        <select id="sortc" aria-label="Sort by"><option value="code">↕ Card number</option><option value="phigh" ${f.sort === 'phigh' ? 'selected' : ''}>↕ Price high to low</option><option value="plow" ${f.sort === 'plow' ? 'selected' : ''}>↕ Price low to high</option><option value="name" ${f.sort === 'name' ? 'selected' : ''}>↕ Name A to Z</option></select>
         <select id="rar"><option value="">All rarities</option>${rarities.map((r) => `<option ${f.rar === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select>
         ${state.user ? `<select id="own"><option value="all">All cards</option><option value="owned" ${f.own === 'owned' ? 'selected' : ''}>Owned</option><option value="missing" ${f.own === 'missing' ? 'selected' : ''}>Missing</option></select>` : ''}</div>
         <label class="inline"><input type="checkbox" id="alt" ${f.alt ? 'checked' : ''} style="width:auto"> Show alternate arts</label></div>
@@ -67,9 +70,9 @@ export async function viewSet($app, id) {
         return `<a class="tile ${state.user && !q ? 'dim' : ''}" href="#/card/${esc(c.code)}">${cardImg(c)}<div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity)}${q ? ` · ×${q}` : ''}</div><div class="nm">${esc(c.name)}</div>
         <div class="muted">${c.jpy ? 'Ref ' + bnd(refBnd(c)) : ''}</div>${fs ? `<span class="badge bn">${fs.n} for sale from ${bnd(fs.min)}</span>` : ''}</div></a>`; }).join('')}</div>`;
     const $ = (s) => $app.querySelector(s);
-    const upd = () => { f.q = $('#q').value; f.rar = $('#rar').value; f.alt = $('#alt').checked; if ($('#own')) f.own = $('#own').value; sessionStorage.setItem('setf', JSON.stringify(f)); };
+    const upd = () => { f.q = $('#q').value; f.rar = $('#rar').value; f.alt = $('#alt').checked; f.sort = $('#sortc').value; if ($('#own')) f.own = $('#own').value; sessionStorage.setItem('setf', JSON.stringify(f)); };
     $('#q').oninput = () => { upd(); clearTimeout(draw.t); draw.t = setTimeout(() => { draw(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 250); };
-    $('#rar').onchange = () => { upd(); draw(); }; $('#alt').onchange = () => { upd(); draw(); }; if ($('#own')) $('#own').onchange = () => { upd(); draw(); };
+    $('#rar').onchange = () => { upd(); draw(); }; $('#sortc').onchange = () => { upd(); draw(); }; $('#alt').onchange = () => { upd(); draw(); }; if ($('#own')) $('#own').onchange = () => { upd(); draw(); };
   };
   draw();
 }
