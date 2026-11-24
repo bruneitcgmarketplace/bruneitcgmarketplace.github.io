@@ -1,8 +1,5 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadMe, loadCatalog, loadInv, loadFx, isMember, needLogin, bindLogin, signOut, refBnd, PRICE } from '../lib.js';
 
-let installEvt = null;
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; });
-
 export async function viewSettings($app) {
   const cat = await loadCatalog();
   const me = state.me, signed = !!state.user;
@@ -15,11 +12,11 @@ export async function viewSettings($app) {
     <div class="panel"><h2>Membership</h2><p>${isMember() ? `⭐ Member until <b>${new Date(me.member_until).toLocaleDateString()}</b>` : `Free plan. Upgrade for auction selling (BND ${esc(PRICE)}/month).`}</p><a class="btn ${isMember() ? 'sec' : ''}" href="#/membership">${isMember() ? 'Manage membership' : 'Upgrade'}</a></div>` : needLogin('manage your profile')}
     <div class="panel"><h2>Prices</h2><p>Reference prices are Yuyutei (Japan shop) selling prices in JPY, converted to BND using the SGD rate because BND is pegged to SGD.</p>
       <p>Rate: <b>${state.fx.toFixed(5)}</b> BND per JPY <span class="muted">(${esc(state.fxSrc)})</span><br>Prices updated: <b>${esc(cat.updated)}</b></p>
+      <button class="btn sec" id="px-r">Refresh prices</button>
+      <p class="muted" style="margin:.4rem 0 .8rem">Reloads the latest published Yuyutei prices and the live exchange rate. The site re-reads Yuyutei every 6 hours.</p>
       <label class="inline"><input type="checkbox" id="hd" ${localStorage.getItem('hd_images') !== '0' ? 'checked' : ''} style="width:auto"> Sharp card images (uses more mobile data)</label>
       <label>Manual rate override (BND per JPY, empty = automatic)</label><div class="row tight"><input id="fx" inputmode="decimal" value="${esc(localStorage.getItem('fx_manual') || '')}" style="max-width:160px"><button class="btn sec" id="fx-s">Apply</button></div></div>
     ${signed ? `<div class="panel"><h2>Data</h2><button class="btn sec" id="exp">Export inventory (CSV)</button></div>` : ''}
-    <div class="panel"><h2>App</h2>${installEvt ? `<button class="btn" id="inst">Install app</button>` : `<p class="muted">Install: open the browser menu and choose "Add to Home screen" (iPhone: Share, then Add to Home Screen).</p>`}
-      <p class="muted">Brunei One Piece TCG · One Piece Card Game. Not affiliated with Bandai or Yuyutei. Deals are settled directly between buyer and seller; the site does not handle payments.</p></div>
     ${me?.is_admin ? `<div class="panel"><a class="btn sec" href="#/admin">Open admin</a></div>` : ''}
     ${signed ? `<p><button class="btn sec" id="so">Sign out</button></p>` : ''}`;
   bindLogin($app);
@@ -37,6 +34,14 @@ export async function viewSettings($app) {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'inventory.csv'; a.click();
     });
   }
+  $('#px-r').onclick = guard(async () => {
+    const btn = $('#px-r'), old = cat.updated; btn.disabled = true; btn.textContent = 'Refreshing...';
+    try {
+      await loadFx(true); const fresh = await loadCatalog(true);
+      toast(fresh.updated !== old ? 'Prices updated to ' + fresh.updated : 'Already the latest prices (' + fresh.updated + ')');
+      viewSettings($app);
+    } finally { btn.disabled = false; btn.textContent = 'Refresh prices'; }
+  });
   $('#hd').onchange = (e) => { localStorage.setItem('hd_images', e.target.checked ? '1' : '0'); toast(e.target.checked ? 'Sharp images on' : 'Data saver on'); };
   $('#fx-s').onclick = guard(async () => {
     const v = $('#fx').value.trim();
@@ -44,5 +49,4 @@ export async function viewSettings($app) {
     if (v) localStorage.setItem('fx_manual', v); else localStorage.removeItem('fx_manual');
     await loadFx(); toast('Rate updated'); viewSettings($app);
   });
-  const inst = $('#inst'); if (inst) inst.onclick = async () => { installEvt.prompt(); installEvt = null; };
 }
