@@ -6,13 +6,24 @@ window.__scanner = scanner; // test hook
 const session = []; // staged cards: {code, ref, qty, on}
 let stop = null;
 
+// Browsers keep audio muted until a tap: unlockAudio() runs on the Start camera tap and the Beep tick, so scan beeps can play later.
 let audioCtx = null;
-function beep(ok = true) {
+function unlockAudio() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.frequency.value = ok ? 880 : 330; g.gain.value = 0.08; o.connect(g); g.connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime + 0.09);
+    if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+  } catch { /* no audio */ }
+}
+function beep(ok = true) {
+  try {
+    unlockAudio(); const ctx = audioCtx; if (!ctx) return;
+    const t0 = ctx.currentTime + 0.01;
+    (ok ? [[880, 0], [1320, 0.13]] : [[330, 0]]).forEach(([hz, at]) => {   // two rising notes = added, one low note = problem
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(0.22, t0 + at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.12);
+      o.connect(g); g.connect(ctx.destination); o.start(t0 + at); o.stop(t0 + at + 0.13);
+    });
   } catch { /* no audio */ }
 }
 
@@ -31,12 +42,14 @@ export async function viewScan($app) {
     <div id="staged"></div>`;
   const $ = (s) => $app.querySelector(s);
 
-  const stage = (code, ref) => {
+  const stage = (code, ref, quiet) => {
     const variants = cat.byCode.get(code); if (!variants) return false;
     const r = ref && cat.byRef.get(ref) ? ref : (variants.find((c) => c.def) || variants[0]).ref;
     const ex = session.find((s) => s.code === code && s.ref === r);
     if (ex) { ex.qty++; ex.on = true; session.splice(session.indexOf(ex), 1); session.unshift(ex); } else session.unshift({ code, ref: r, qty: 1, on: true });
-    drawStaged(); return true;
+    drawStaged();
+    if (!quiet) { const row = session[0]; toast(`✓ Added ${code} ${cat.byRef.get(r)?.name || ''}${row.qty > 1 ? ` (${row.qty} in scan list)` : ''}`); }
+    return true;
   };
   const drawStaged = () => {
     const el = $('#staged'); if (!el) return;
@@ -115,13 +128,14 @@ export async function viewScan($app) {
       resEl.querySelector('#rimg').appendChild(overlay);
       resEl.querySelector('#rclose').onclick = () => (resEl.innerHTML = '');
       resEl.querySelectorAll('[data-k]').forEach((x) => { const i = +x.dataset.i, k = x.dataset.k; x.onchange = () => { if (k === 'on') items[i].on = x.checked; else { items[i].ref = x.value; items[i].on = true; } draw(); }; });
-      const st = resEl.querySelector('#rstage'); if (st) st.onclick = () => { let c = 0; for (const it of items) if (it.on) { stage(cat.byRef.get(it.ref).code, it.ref); c++; } resEl.innerHTML = ''; toast(`${c} card${c > 1 ? 's' : ''} staged. Check the list, then add to inventory.`); };
+      const st = resEl.querySelector('#rstage'); if (st) st.onclick = () => { let c = 0; for (const it of items) if (it.on) { stage(cat.byRef.get(it.ref).code, it.ref, true); c++; } resEl.innerHTML = ''; toast(`${c} card${c > 1 ? 's' : ''} staged. Check the list, then add to inventory.`); };
       resEl.querySelector('#rrot').onclick = guard(async () => { const r = document.createElement('canvas'); r.width = cv.height; r.height = cv.width; const g = r.getContext('2d'); g.translate(r.width, 0); g.rotate(Math.PI / 2); g.drawImage(cv, 0, 0); await analyse(r, name + ' (rotated)'); });
     };
     draw();
     resEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   $('#gal').onclick = () => $('#file').click();
+  $('#snd').onchange = (e) => { if (e.target.checked) beep(); };   // test beep, and unlocks audio
   $('#file').onchange = guard(async (e) => {
     const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
     for (const f of files) { const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); await analyse(bmp, f.name); bmp.close?.(); if (files.length > 1) await new Promise((r) => setTimeout(r, 50)); }
@@ -129,6 +143,7 @@ export async function viewScan($app) {
 
   // ----- live camera -----
   camBtn.onclick = guard(async () => {
+    unlockAudio();
     if (stop) { stop(); return; }
     camBtn.disabled = true; setStatus('Loading card database…');
     let stream;
@@ -157,7 +172,7 @@ export async function viewScan($app) {
     const tracker = makeTracker((code, ref, info) => {
       window.__scanHook?.(code, info);
       stage(code, ref); cands.innerHTML = ''; if ($('#snd')?.checked) beep(); navigator.vibrate?.(40);
-      const c = cat.byRef.get(ref); flash(`✓ ${code} ${c?.name || ''}`); drawRect(lastRect, '#2fc76d');
+      const c = cat.byRef.get(ref); flash(`✓ Added ${code} ${c?.name || ''}`); drawRect(lastRect, '#2fc76d');
     }, (s) => {
       if (s.kind === 'empty') { setStatus('Show a card in view'); cands.innerHTML = ''; drawRect(null); }
       else if (s.kind === 'seeing') { setStatus(`Reading ${s.code}…`); drawRect(lastRect, '#ffc83d'); }
