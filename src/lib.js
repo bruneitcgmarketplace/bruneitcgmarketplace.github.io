@@ -212,12 +212,14 @@ export function tile(l) {
   const ref = state.cat?.byRef.get(l.card_ref);
   const r = ref ? refBnd(ref) : 0, p = listingPrice(l);
   const deal = l.type === 'buy_now' && r > 0 && p <= r * 0.9 ? `<span class="badge warn">Below market</span>` : '';
-  return `<a class="tile" href="#/listing/${l.id}">
+  const held = l.type === 'buy_now' && l.status === 'reserved';
+  return `<a class="tile${held ? ' held' : ''}" href="#/listing/${l.id}">
     <img loading="lazy" decoding="async" src="${esc(listingImg(l))}" ${!l.photos?.length ? `data-hd="${esc(upImg(l.catalog_image, 'front'))}"` : ''} alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
+    ${held ? '<span class="holdtag">On hold</span>' : ''}
     <div class="b"><div class="code">${esc(l.card_code)} · ${esc(l.rarity || '')} · ${esc(l.condition)}</div>
     <div class="nm">${esc(ref?.name || l.card_name)}</div>
     <div class="row tight between"><span class="price">${bnd(p)}</span><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span></div>
-    ${l.type === 'auction' ? `<div class="muted">${l.bid_count} bids · ${timerHtml(l.ends_at)}</div>` : deal}</div></a>`;
+    ${l.type === 'auction' ? `<div class="muted">${l.bid_count} bids · ${timerHtml(l.ends_at)}</div>` : held ? `<div class="holdnote"><b>On hold.</b> Another buyer is completing this purchase.</div>` : deal}</div></a>`;
 }
 
 // ---------- card picker (search the catalogue) ----------

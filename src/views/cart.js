@@ -20,7 +20,7 @@ export async function viewCart($app) {
           <div class="grow"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>
           <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
           <div class="muted">Seller: ${esc(l.seller?.display_name)}</div>
-          <div class="row tight between" style="margin-top:.3rem"><span class="price">${bnd(l.price)}</span>${live ? '' : `<span class="chip bad">${l.status === 'active' ? 'Not available' : 'No longer available'}</span>`}</div></div>
+          <div class="row tight between" style="margin-top:.3rem"><span class="price">${bnd(l.price)}</span>${live ? '' : `<span class="chip bad">${l.status === 'active' ? 'Not available' : l.status === 'reserved' ? 'On hold by another buyer' : 'No longer available'}</span>`}</div></div>
           <button class="x-btn" data-rm="${l.id}" aria-label="Remove from cart">✕</button></div>`;
       }).join('')}
       <div class="panel cart-total"><div class="row tight between"><span>Total (${rows.filter(ok).length} available)</span><b class="price" style="font-size:1.2rem">${bnd(total)}</b></div>

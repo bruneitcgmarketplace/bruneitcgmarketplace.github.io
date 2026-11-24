@@ -15,13 +15,14 @@ export async function viewListing($app, id, setUnsub) {
     const photos = l.photos?.length ? l.photos : [l.catalog_image].filter(Boolean);
     const small = (u) => upImg(u, '250_350'), sharp = (u) => upImg(u, 'front'), thumb = (u) => upImg(u, '100_140');
     const live = l.status === 'active' && (l.type === 'buy_now' || new Date(l.ends_at) > new Date());
+    const held = l.status === 'reserved' && l.type === 'buy_now' && !isSeller && !isBuyer;
     const minBid = l.current_bid == null ? Number(l.start_price) : Number(l.current_bid) + Number(l.bid_increment);
     const shown = l.type === 'auction' ? Number(l.current_bid ?? l.start_price) : Number(l.price);
 
     let actions = '';
     if (!uid && live) actions = `<p class="muted">Sign in to ${l.type === 'auction' ? 'bid' : 'buy'}.</p><button class="btn" id="login">Sign in with Google</button>`;
     else if (live && !isSeller && l.type === 'buy_now') actions = `<div class="row tight"><button class="btn" id="buy">Buy now · ${bnd(l.price)}</button><button class="btn sec" id="cart">${inCart(l.id) ? '✓ In cart · Remove' : '🛒 Add to cart'}</button></div>
-      <p class="muted">Nothing is charged on this site. Buying reserves the card; you and the seller then arrange payment and meet-up on WhatsApp.</p>`;
+      <p class="muted">Nothing is charged on this site. Buying puts the card on hold for you so nobody else can buy it. You and the seller then arrange payment and meet-up on WhatsApp.</p>`;
     else if (live && !isSeller) actions = l.current_bidder === uid
       ? `<div class="notice ok">You are the highest bidder.</div>`
       : `<div class="row tight"><input id="amt" type="number" step="0.5" min="${minBid}" value="${minBid}" style="width:140px"><button class="btn" id="bid">Place bid</button></div>
@@ -40,23 +41,25 @@ export async function viewListing($app, id, setUnsub) {
           : `Hi ${ct.display_name || ''}, this is ${l.buyer?.display_name || 'a buyer'} from Brunei One Piece TCG. ${l.type === 'auction' ? 'I won the auction for' : 'I would like to buy'} ${item}.\nPlease confirm and let me know how to pay.\nListing link: ${link}`;
         return `<p><a class="btn ${isSeller ? 'ok' : ''}" target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}?text=${encodeURIComponent(msg)}">💬 ${isSeller ? 'Ask buyer to pay' : 'Inform seller'}</a></p>`;
       };
-      actions = `<div class="notice">${l.type === 'auction' ? 'Auction won' : 'Reserved'}. ${isSeller ? 'Contact the buyer to settle.' : 'Contact the seller to settle.'}</div>
+      actions = `<div class="notice">${l.type === 'auction' ? 'Auction won' : isSeller ? 'On hold: a buyer clicked Buy now' : 'On hold for you'}. ${isSeller ? 'Contact the buyer on WhatsApp to settle, then mark it sold or release it.' : 'Contact the seller on WhatsApp to complete the purchase.'}</div>
         ${ct ? `<p><b>${esc(ct.display_name)}</b> · <a target="_blank" rel="noopener" href="https://wa.me/${esc(ct.whatsapp)}">WhatsApp +${esc(ct.whatsapp)}</a></p>${waBtn(ct)}` : ''}
         ${isSeller ? `<div class="row tight"><button class="btn ok" id="sold">Mark as sold</button><button class="btn sec" id="release">Release</button><button class="btn bad" id="noshow">Release + strike buyer</button></div>`
           : l.type === 'buy_now' ? `<button class="btn sec" id="unreserve">Cancel my reservation</button>` : ''}`;
-    } else if (l.status === 'reserved') actions = `<div class="notice">Reserved by another buyer.</div>`;
+    } else if (held) actions = `<button class="btn held-btn" disabled>Buy now · On hold</button>
+      <div class="holdbox"><b>This card is on hold.</b><br>Another buyer is completing this purchase, so it cannot be bought right now. If the deal does not go ahead, it goes back on sale. Check back soon.</div>`;
+    else if (l.status === 'reserved') actions = `<div class="notice">Reserved by another buyer.</div>`;
     else if (l.status === 'sold') actions = `<div class="notice">Sold.</div>`;
     else if (l.status === 'ended') actions = `<div class="notice">Auction ended without a sale.</div>`;
     else if (l.status === 'cancelled') actions = `<div class="notice">Listing cancelled.</div>`;
 
     const diff = ref > 0 ? Math.round(((shown - ref) / ref) * 100) : null;
     $app.innerHTML = `<p><a href="javascript:history.back()">← Back</a></p><div class="detail"><div>
-      <img class="main" id="mainimg" src="${esc(small(photos[0] || ''))}" alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
+      <img class="main${held ? ' held-img' : ''}" id="mainimg" src="${esc(small(photos[0] || ''))}" alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
       <div class="thumbs">${photos.length > 1 || l.photos?.length ? photos.map((p) => `<img src="${esc(thumb(p))}" data-src="${esc(p)}" alt="">`).join('') : ''}</div>
       ${l.photos?.length ? '' : '<p class="muted">Catalogue image only. Ask the seller for photos of the actual card.</p>'}</div>
       <div><h1>${esc(c?.name || l.card_name)}</h1>
       <p class="muted"><a href="#/card/${esc(l.card_code)}">${esc(l.card_code)}</a> · ${esc(l.rarity || '')} · ${esc((l.set_id || '').toUpperCase())} · Condition ${esc(l.condition)} · ${esc(l.language)}</p>
-      <p><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span></p>
+      <p><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}"${held ? ' style="background:#a3a8b0;border-color:#a3a8b0"' : ''}>${held ? 'On hold' : l.type === 'auction' ? 'Auction' : 'Buy now'}</span></p>
       <p class="price" style="font-size:1.5rem">${bnd(shown)}</p>
       ${ref > 0 ? `<p class="muted">Reference ${bnd(ref)} (Yuyutei JP shop price)${l.type === 'buy_now' && diff !== null ? ` · ${diff <= 0 ? Math.abs(diff) + '% below' : diff + '% above'} reference` : ''}. Condition and local demand affect the real value.</p>` : ''}
       ${l.type === 'auction' ? `<p>${l.bid_count} bids${l.bidder ? ` · leader ${esc(l.bidder.display_name)}` : ''}<br>${l.status === 'active' ? 'Ends in ' + timerHtml(l.ends_at, true) : 'Ended'}</p>` : ''}
@@ -74,7 +77,7 @@ export async function viewListing($app, id, setUnsub) {
     const on = (sel, fn) => { const el = $app.querySelector('#' + sel); if (el) el.onclick = guard(fn); };
     on('login', signIn);
     on('cart', async () => { if (inCart(id)) { removeFromCart(id); toast('Removed from cart'); } else { addToCart(id); toast('Added to cart'); } draw(); });
-    on('buy', async () => { if (!(await confirmSheet('Reserve this card?', 'You will arrange payment and meet-up with the seller on WhatsApp.', 'Reserve'))) return; await rpc('buy_now', { p_listing: id }); toast('Reserved. Contact the seller.'); draw(); });
+    on('buy', async () => { if (!(await confirmSheet('Buy this card?', 'The card is put on hold for you, so nobody else can buy it. You then arrange payment and meet-up with the seller on WhatsApp.', 'Buy now'))) return; await rpc('buy_now', { p_listing: id }); toast('This card is now on hold for you. Contact the seller on WhatsApp.'); draw(); });
     on('bid', async () => { await rpc('place_bid', { p_listing: id, p_amount: Number($app.querySelector('#amt').value) }); toast('Bid placed'); draw(); });
     on('cancel', async () => { if (!(await confirmSheet('Cancel listing?', 'The listing will be removed.', 'Cancel listing', true))) return; await rpc('cancel_listing', { p_listing: id }); draw(); });
     on('sold', async () => { await rpc('mark_sold', { p_listing: id }); toast('Marked as sold'); draw(); });

@@ -16,6 +16,7 @@ await db.exec(readFileSync(new URL('../01_schema.sql', import.meta.url), 'utf8')
 await db.exec(readFileSync(new URL('../03_inventory.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../04_admin.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../05_share.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../07_hold_message.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -70,7 +71,7 @@ ok('is_member true after approval', (await as(seller, `select is_member($1) m`, 
 // --- buy now
 ok('seller cannot buy own', await fails(seller, `select buy_now($1)`, [bn], 'own listing'));
 await as(buyer, `select buy_now($1)`, [bn]);
-ok('second buyer blocked once reserved', await fails(buyer2, `select buy_now($1)`, [bn], 'Already reserved'));
+ok('second buyer blocked while on hold, with the hold message', await fails(buyer2, `select buy_now($1)`, [bn], 'On hold: another buyer is completing this purchase'));
 ok('third party gets no contact', (await as(buyer2, `select * from get_contact($1)`, [bn])).rows.length === 0);
 ok('buyer gets seller contact', (await as(buyer, `select * from get_contact($1)`, [bn])).rows[0]?.role === 'seller');
 ok('seller gets buyer contact', (await as(seller, `select * from get_contact($1)`, [bn])).rows[0]?.whatsapp === '6737123456');

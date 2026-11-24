@@ -85,7 +85,7 @@ async function route() {
     switch (page) {
       case 'inventory': await viewInventory(target); break;
       case 'explore': await viewExplore(target); break;
-      case 'market': await viewMarket(target); break;
+      case 'market': await viewMarket(target, (fn) => { if (ok()) unsub = fn; else fn(); }); break;
       case 'cart': await viewCart(target); break;
       case 'account': await viewAccount(target); break;
       case 'mylistings': await viewOrders(target, { only: 'selling' }); break;

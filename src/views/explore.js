@@ -4,7 +4,7 @@ const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
 
 export { viewExplore } from './exploreSets.js';
 
-export async function viewMarket($app) {
+export async function viewMarket($app, setUnsub) {
   const cat = await loadCatalog();
   const p = qs();
   const f = JSON.parse(sessionStorage.getItem('filters') || '{}');
@@ -20,7 +20,7 @@ export async function viewMarket($app) {
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = $app.querySelector('#type').value, sort = $app.querySelector('#sort').value;
     sessionStorage.setItem('filters', JSON.stringify({ q, type: t, sort }));
-    let req = sb.from('listings').select('*').eq('status', 'active').limit(120);
+    let req = sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').limit(120);
     if (t) req = req.eq('type', t);
     if (q) {
       const s = q.replace(/[%,()]/g, ' ');
@@ -35,11 +35,16 @@ export async function viewMarket($app) {
     const { data, error } = await req;
     const el = $app.querySelector('#list'); if (!el) return;
     if (error) return (el.innerHTML = `<div class="notice err">${esc(error.message)}</div>`);
-    el.innerHTML = data.length ? data.map(tile).join('') : '<p class="muted">No listings match. <a href="#/sell">Sell a card</a></p>';
+    el.innerHTML = data.length ? [...data].sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved')).map(tile).join('') : '<p class="muted">No listings match. <a href="#/sell">Sell a card</a></p>';
   };
   let t; $app.querySelector('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 300); });
   $app.querySelector('#type').onchange = load; $app.querySelector('#sort').onchange = load;
   load();
+  // a card goes grey the moment another buyer clicks Buy now (and back to normal if the hold is released)
+  if (setUnsub) {
+    let rt; const ch = sb.channel('market-feed').on('postgres_changes', { event: '*', schema: 'public', table: 'listings' }, () => { clearTimeout(rt); rt = setTimeout(load, 500); }).subscribe();
+    setUnsub(() => { clearTimeout(rt); sb.removeChannel(ch); });
+  }
 }
 
 // ---------- set page ----------
@@ -84,7 +89,7 @@ export async function viewCard($app, code) {
   if (!variants) { $app.innerHTML = '<div class="notice err">Unknown card</div>'; return; }
   if (state.user) await loadInv();
   const main = variants.find((c) => c.def) || variants[0];
-  const { data: ls } = await sb.from('listings').select('*').eq('status', 'active').eq('card_code', code).order('created_at', { ascending: false });
+  const { data: ls } = await sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').eq('card_code', code).order('created_at', { ascending: false });
   const inv = state.inv || new Map();
   $app.innerHTML = `<p><a href="#/set/${main.set}">← ${esc(setName(main.set))}</a></p>
     <div class="detail"><div><img class="main" id="mainimg" src="${esc(catImg(main))}" alt="${esc(main.code)}" onerror="this.style.visibility='hidden'">
@@ -93,8 +98,8 @@ export async function viewCard($app, code) {
       ${main.jp ? `<p class="muted">${esc(main.jp)}</p>` : ''}
       <div class="panel" id="vinfo"></div>
       <div class="row tight" id="vact"></div></div></div>
-    <div class="sec-h"><h2>For sale (${ls?.length || 0})</h2></div>
-    <div class="grid">${(ls || []).map(tile).join('') || '<p class="muted">Nobody is selling this card right now.</p>'}</div>`;
+    <div class="sec-h"><h2>For sale (${(ls || []).filter((l) => l.status === 'active').length})</h2></div>
+    <div class="grid">${[...(ls || [])].sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved')).map(tile).join('') || '<p class="muted">Nobody is selling this card right now.</p>'}</div>`;
   let cur = main;
   const show = (v) => {
     cur = v;
