@@ -1,5 +1,5 @@
 import { fetchAll, rpc, sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
-import { openShareSheet } from './shared.js';
+import { openShareSheet, shareChoice, shareUrl } from './shared.js';
 import { openListAll } from './listall.js';
 import { cardFilter } from './exploreSets.js';
 
@@ -67,7 +67,18 @@ export async function viewInventory($app) {
     const la = $('#listall'); if (la) la.onclick = guard(() => openListAll());
     const ls = $('#listsel'); if (ls) ls.onclick = guard(() => openListAll([...sel]));
     const sa = $('#selall'); if (sa) sa.onclick = () => { if (shown.length && shown.every((r) => sel.has(r))) shown.forEach((r) => sel.delete(r)); else shown.forEach((r) => sel.add(r)); draw(); };
-    $('#share').onclick = guard(() => openShareSheet(state.me?.display_name ? state.me.display_name + '’s' : 'my'));
+    $('#share').onclick = () => {
+      const who = state.me?.display_name ? state.me.display_name + '’s' : 'my';
+      const link = async () => { let { data: tk, error } = await sb.rpc('my_inventory_share'); if (error) throw new Error(error.message); if (!tk) { const r = await sb.rpc('share_inventory'); if (r.error) throw new Error(r.error.message); tk = r.data; } return shareUrl(tk); };
+      const s = shareChoice({ title: 'Share my collection', selCount: sel.size, extra: '<p style="margin-top:.8rem"><button class="btn sec" id="sc-manage">Manage link / stop sharing</button></p>', build: async (kind) => {
+        const url = await link();
+        if (kind === 'all') return `Check out ${who} One Piece card collection on Brunei One Piece TCG: ${url}`;
+        const rows = invStats().rows.filter((r) => sel.has(r.c.ref)).sort((a, b) => a.c.code.localeCompare(b.c.code));
+        const lines = rows.slice(0, 40).map((r) => `• ${r.c.code} ${r.c.rarity} ${r.c.name} ×${r.q}`);
+        return `${who} One Piece cards (${rows.length} selected):\n${lines.join('\n')}${rows.length > 40 ? `\n…and ${rows.length - 40} more` : ''}\n\nFull collection: ${url}`;
+      } });
+      s.el.querySelector('#sc-manage').onclick = () => { s.close(); guard(() => openShareSheet(who))(); };
+    };
     $('#vm').onclick = () => { localStorage.setItem('view_inv', { list: 'grid', grid: 'tiles', tiles: 'list' }[view] || 'list'); viewInventory($app); };
     const addCard = () => cardPicker(guard(async (c) => { await invAdjust(c.ref, 1); toast(`${c.code} added`); draw(); }), { title: 'Add to inventory' });
     $('#add').onclick = addCard; const a2 = $('#add2'); if (a2) a2.onclick = addCard;

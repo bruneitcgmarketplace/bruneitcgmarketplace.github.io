@@ -54,3 +54,24 @@ export async function viewShared($app, token) {
     ${rows.length ? `<div class="grid">${rows.map(({ c, q }) => `<div class="tile" data-ref="${esc(c.ref)}"><div data-zoom>${cardImg(c)}</div><div class="b"><div class="code">${esc(c.code)} · ${esc(c.rarity)}</div><div class="nm">${esc(c.name)}</div><div class="row tight between"><span class="price">${c.jpy ? bnd(refBnd(c)) : ''}</span><b>×${q}</b></div></div></div>`).join('')}</div>` : '<div class="panel center"><p class="muted">This collection is empty.</p></div>'}`;
   $app.querySelectorAll('[data-zoom]').forEach((el) => { el.onclick = () => enlarge(cat.byRef.get(el.closest('[data-ref]').dataset.ref)); });
 }
+
+// Preview the message (editable), then send to WhatsApp / copy / system share.
+export function shareComposer(title, text) {
+  const s = sheet(`<h2>${esc(title)}</h2><textarea id="sc-t" rows="9" style="width:100%">${esc(text)}</textarea>
+    <div class="row tight" style="margin-top:.6rem"><a class="btn" id="sc-wa" target="_blank" rel="noopener">WhatsApp</a><button class="btn sec" id="sc-copy">Copy</button>${navigator.share ? '<button class="btn sec" id="sc-nat">Share…</button>' : ''}</div>`);
+  const t = s.el.querySelector('#sc-t'), wa = s.el.querySelector('#sc-wa');
+  const sync = () => { wa.href = 'https://wa.me/?text=' + encodeURIComponent(t.value); };
+  t.oninput = sync; sync();
+  s.el.querySelector('#sc-copy').onclick = async () => { try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } toast('Copied'); };
+  const n = s.el.querySelector('#sc-nat'); if (n) n.onclick = () => navigator.share({ text: t.value }).catch(() => {});
+  return s;
+}
+
+// Two-choice share sheet: selected items or everything. build(kind) returns the message text.
+export function shareChoice({ title, selCount, build, extra = '' }) {
+  const s = sheet(`<h2>${esc(title)}</h2><p class="muted">Choose what to share. The message includes a link.</p>
+    <div class="row tight"><button class="btn ${selCount ? '' : 'sec'}" id="sc-sel" ${selCount ? '' : 'disabled'}>Share selected (${selCount})</button><button class="btn" id="sc-all">Share all</button></div>${extra}`);
+  const go = (kind) => guard(async () => { const text = await build(kind); s.close(); shareComposer(title, text); });
+  s.el.querySelector('#sc-sel').onclick = go('selected'); s.el.querySelector('#sc-all').onclick = go('all');
+  return s;
+}
