@@ -318,7 +318,7 @@ export async function findMany(opts = {}, onProgress) {
 }
 
 // ----- decision logic: accept a card after enough confident frames in a short window, re-arm when it leaves -----
-export const T = { det: 7, accept: 0.64, margin: 0.08, nocard: 0.48, need: 3, minMs: 450, windowMs: 1300, absentMs: 550 };
+export const T = { det: 7, accept: 0.64, margin: 0.08, nocard: 0.48, need: 3, minMs: 250, windowMs: 1300, absentMs: 550 };
 export function makeTracker(onAdd, onState, now = () => performance.now()) {
   let hist = [], latched = null, absentSince = null, weak = 0;
   return function feed(r) {

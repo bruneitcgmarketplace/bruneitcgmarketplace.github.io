@@ -33,9 +33,8 @@ export async function viewScan($app) {
   $app.innerHTML = `<h1>Scan</h1>
     <div class="panel"><div class="vbox" id="vbox"><video id="vid" playsinline muted></video><canvas id="ov" class="ov"></canvas>
         <div class="flash" id="flash"></div><div class="vhint" id="vhint">Camera is off</div></div>
-      <div class="row tight" style="margin-top:.6rem"><button class="btn" id="cam">Start camera</button><button class="btn sec" id="snap" disabled>📸 Snap</button><button class="btn sec" id="gal">🖼 From gallery</button><button class="btn sec" id="torch" style="display:none">🔦 Light</button><label class="inline" style="margin:0"><input type="checkbox" id="snd" checked style="width:auto"> Beep</label></div>
-      <input type="file" id="file" accept="image/*" multiple hidden>
-      <div id="ss" class="scan-status muted">Start the camera and show a card anywhere in view (about half the frame or bigger). Or pick photos from your gallery: one card or many.</div>
+      <div class="row tight" style="margin-top:.6rem"><button class="btn" id="cam">Start camera</button><button class="btn sec" id="snap" disabled>📸 Snap</button><button class="btn sec" id="torch" style="display:none">🔦 Light</button><label class="inline" style="margin:0"><input type="checkbox" id="snd" checked style="width:auto"> Beep</label></div>
+      <div id="ss" class="scan-status muted">Start the camera and show a card anywhere in view (about half the frame or bigger). Hold it steady for a moment and avoid glare.</div>
       <div id="cands" class="row tight" style="margin-top:.4rem"></div></div>
     <div id="res"></div>
     <div class="panel"><label>Or type a code</label><div class="row tight"><input id="code" placeholder="OP01-001" autocomplete="off" style="max-width:220px"><button class="btn sec" id="addc">Stage</button></div></div>
@@ -134,12 +133,7 @@ export async function viewScan($app) {
     draw();
     resEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
-  $('#gal').onclick = () => $('#file').click();
   $('#snd').onchange = (e) => { if (e.target.checked) beep(); };   // test beep, and unlocks audio
-  $('#file').onchange = guard(async (e) => {
-    const files = [...e.target.files]; e.target.value = ''; if (!files.length) return;
-    for (const f of files) { const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }); await analyse(bmp, f.name); bmp.close?.(); if (files.length > 1) await new Promise((r) => setTimeout(r, 50)); }
-  });
 
   // ----- live camera -----
   camBtn.onclick = guard(async () => {
@@ -202,7 +196,7 @@ export async function viewScan($app) {
           }
         } catch (e) { console.warn('scan frame', e); }
         const dt = performance.now() - t0; stats.frames++; stats.ms += dt;
-        await new Promise((r) => setTimeout(r, Math.max(30, 100 - dt)));
+        await new Promise((r) => setTimeout(r, Math.max(20, 60 - dt)));
       }
       if (alive) stop?.();
     })();
