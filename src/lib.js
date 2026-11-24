@@ -13,7 +13,10 @@ export const state = { user: null, me: null, cat: null, inv: null, fx: 0.0085, f
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const bnd = (n) => 'BND ' + Number(n).toFixed(2);
 export const bndShort = (n) => (n >= 1000 ? 'BND ' + (n / 1000).toFixed(1) + 'k' : bnd(n));
-export const isMember = () => !!(state.me?.member_until && new Date(state.me.member_until) > new Date());
+// Membership plan is paused for the testing period: every signed-in user gets all features.
+// Set to true to bring the plan back (and re-apply the is_member() function from supabase/01_schema.sql).
+export const MEMBERSHIP_ENABLED = false;
+export const isMember = () => !MEMBERSHIP_ENABLED || !!(state.me?.member_until && new Date(state.me.member_until) > new Date());
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 let toastT;

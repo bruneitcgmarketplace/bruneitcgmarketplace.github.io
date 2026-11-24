@@ -88,7 +88,7 @@ async function route() {
       case 'settings': await viewSettings(target); break;
       case 'listing': await viewListing(target, arg, (fn) => { if (ok()) unsub = fn; else fn(); }); break;
       case 'sell': await viewSell(target, arg); break;
-      case 'membership': await viewMembership(target); break;
+      case 'membership': location.replace('#/account'); break;
       case 'admin': await viewAdmin(target); break;
       default: await viewHome(target);
     }

@@ -9,7 +9,7 @@ export async function viewSettings($app) {
       <label>Display name (shown to buyers and sellers)</label><div class="row tight"><input id="dn" value="" style="max-width:260px"><button class="btn sec" id="dn-s">Save</button></div>
       <label>WhatsApp number (country code, no +). Shared only with the other party of a reserved or sold deal.</label><div class="row tight"><input id="wa" inputmode="tel" placeholder="6737123456" value="${esc(me?.whatsapp || '')}" style="max-width:260px"><button class="btn sec" id="wa-s">Save</button></div>
       <p class="muted">Strikes: ${me?.strikes ?? 0} of 3</p></div>
-    <div class="panel"><h2>Membership</h2><p>${isMember() ? `⭐ Member until <b>${new Date(me.member_until).toLocaleDateString()}</b>` : `Free plan. Upgrade for auction selling (BND ${esc(PRICE)}/month).`}</p><a class="btn ${isMember() ? 'sec' : ''}" href="#/membership">${isMember() ? 'Manage membership' : 'Upgrade'}</a></div>` : needLogin('manage your profile')}
+` : needLogin('manage your profile')}
     <div class="panel"><h2>Prices</h2><p>Reference prices are Yuyutei (Japan shop) selling prices in JPY, converted to BND using the SGD rate because BND is pegged to SGD.</p>
       <p>Rate: <b>${state.fx.toFixed(5)}</b> BND per JPY <span class="muted">(${esc(state.fxSrc)})</span><br>Prices updated: <b>${esc(cat.updated)}</b></p>
       <button class="btn sec" id="px-r">Refresh prices</button>
