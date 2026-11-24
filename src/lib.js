@@ -67,11 +67,12 @@ export function promptSheet(title, label, { value = '', okLabel = 'OK', multilin
 // ---------- catalog ----------
 // Art type from the Yuyutei card name and rarity. Yuyutei writes the Japanese 'Manga Rare' as (スーパーパラレル) = super parallel.
 export const ART = {
-  std: ['Standard art', 'Standard'], alt: ['Alternate art', 'Alt art'], manga: ['Manga (Super Parallel)', 'Manga'], redmanga: ['Red Manga (Red Super Parallel)', 'Red Manga'],
+  std: ['Standard art', 'Standard'], don: ['DON!! card', 'DON!!'], alt: ['Alternate art', 'Alt art'], manga: ['Manga (Super Parallel)', 'Manga'], redmanga: ['Red Manga (Red Super Parallel)', 'Red Manga'],
   goldsilver: ['Gold / Silver SP', 'SP Gold/Silver'], special: ['Special / drawn art', 'Special art'], foil: ['Foil variant', 'Foil'],
   sp: ['SP (Special)', 'SP'], tr: ['Treasure Rare', 'Treasure'], promo: ['Promo', 'Promo'],
 };
 export function artOf(jp, rarity) {
+  if (rarity === '-' || /^ドン!!カード/.test(jp)) return 'don';   // DON!! cards (every art, incl. manga) have their own category
   if (/レッドスーパーパラレル/.test(jp)) return 'redmanga';
   if (/スーパーパラレル/.test(jp)) return 'manga';
   if (/金パラレル|銀パラレル/.test(jp)) return 'goldsilver';
