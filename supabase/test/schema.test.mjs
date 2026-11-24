@@ -18,6 +18,8 @@ await db.exec(readFileSync(new URL('../04_admin.sql', import.meta.url), 'utf8'))
 await db.exec(readFileSync(new URL('../05_share.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../07_hold_message.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../08_sold_at.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../10_avatar.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../12_problem_reports.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../09_agreed_price.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
@@ -185,6 +187,44 @@ await as(buyer, `select buy_now($1)`, [ap4]); await as(seller, `select mark_sold
 ok('agreed price: higher than listing allowed, rounded to 2 dp', Number((await as(buyer, `select agreed_price from listings where id=$1`, [ap4])).rows[0].agreed_price) === 45.68);
 ok('agreed price: only reserved listings can be marked sold', await fails(seller, `select mark_sold($1, 10)`, [ap1], 'Only reserved'));
 ok('agreed price: single-argument mark_sold still works (no ambiguity)', (await as(seller, `select count(*) c from pg_proc where proname = 'mark_sold'`)).rows[0].c == 1);
+
+// --- profile picture (10)
+const avUrl = (u, f = 'avatar-1.jpg') => `https://x.supabase.co/storage/v1/object/public/avatars/${u}/${f}`;
+await as(seller, `select set_avatar($1)`, [avUrl(seller)]);
+ok('avatar: set own picture', (await as(buyer, `select avatar_url from profiles where id=$1`, [seller])).rows[0].avatar_url === avUrl(seller));
+ok('avatar: cannot point into another users folder', await fails(seller, `select set_avatar($1)`, [avUrl(buyer)], 'Invalid avatar'));
+ok('avatar: cannot use an outside URL', await fails(seller, `select set_avatar($1)`, ['https://evil.example/pic.jpg'], 'Invalid avatar'));
+ok('avatar: other bucket rejected', await fails(seller, `select set_avatar($1)`, [`https://x.supabase.co/storage/v1/object/public/listing-photos/${seller}/a.jpg`], 'Invalid avatar'));
+ok('avatar: anonymous cannot set', await fails(null, `select set_avatar($1)`, [avUrl(seller)]));
+ok('avatar: users cannot write profiles.avatar_url directly', await fails(seller, `update profiles set avatar_url = 'https://evil.example/x.jpg' where id = $1`, [seller]));
+await as(seller, `select set_avatar(null)`);
+ok('avatar: remove clears it', (await as(seller, `select avatar_url from profiles where id=$1`, [seller])).rows[0].avatar_url === null);
+
+// --- problem reports (12)
+const pf = (u, n = 'shot.jpg') => ({ path: `${u}/${n}`, name: n, type: 'image/jpeg', size: 1234 });
+const pid = (await as(buyer, `select submit_problem('bug', 'The cart button does nothing', 'Pixel 8', $1::jsonb) id`, [JSON.stringify([pf(buyer)])])).rows[0].id;
+ok('problem: user can submit with an attachment', pid > 0);
+ok('problem: reporter sees own report', (await as(buyer, `select * from problem_reports`)).rows.length === 1);
+ok('problem: other users cannot see it', (await as(buyer2, `select * from problem_reports`)).rows.length === 0);
+ok('problem: admin sees it', (await as(boss, `select * from problem_reports`)).rows.length === 1);
+ok('problem: attachment in someone elses folder rejected', await fails(buyer, `select submit_problem('bug', 'hello there', null, $1::jsonb)`, [JSON.stringify([pf(buyer2)])], 'Invalid attachment'));
+ok('problem: path traversal rejected', await fails(buyer, `select submit_problem('bug', 'hello there', null, $1::jsonb)`, [JSON.stringify([{ path: `${buyer}/../x.jpg`, name: 'x.jpg', type: 'image/jpeg', size: 1 }])], 'Invalid attachment'));
+ok('problem: more than 3 files rejected', await fails(buyer, `select submit_problem('bug', 'hello there', null, $1::jsonb)`, [JSON.stringify([1, 2, 3, 4].map((i) => pf(buyer, `s${i}.jpg`)))], 'up to 3'));
+ok('problem: bad category rejected', await fails(buyer, `select submit_problem('hack', 'hello there')`, [], 'Choose a category'));
+ok('problem: too short rejected', await fails(buyer, `select submit_problem('bug', 'hi')`, [], 'at least 5'));
+ok('problem: too long rejected', await fails(buyer, `select submit_problem('bug', $1)`, ['x'.repeat(2001)], 'too long'));
+ok('problem: anonymous cannot submit', await fails(null, `select submit_problem('bug', 'hello there')`));
+ok('problem: no direct insert', await fails(buyer, `insert into problem_reports(reporter_id, category, message) values ($1, 'bug', 'direct insert')`, [buyer]));
+try { await as(buyer, `update problem_reports set status = 'resolved' where id = $1`, [pid]); } catch { /* blocked by privileges: fine */ }
+ok('problem: reporter cannot change the status directly', (await as(buyer, `select status from problem_reports where id=$1`, [pid])).rows[0].status === 'open');
+ok('problem: non-admin cannot update status', await fails(buyer, `select admin_update_problem($1, 'resolved', 'x')`, [pid], 'Admin only'));
+await as(boss, `select admin_update_problem($1, 'working', '  Looking into it  ')`, [pid]);
+const prow = (await as(buyer, `select status, admin_note from problem_reports where id=$1`, [pid])).rows[0];
+ok('problem: admin sets status and note, reporter sees the reply', prow.status === 'working' && prow.admin_note === 'Looking into it');
+ok('problem: invalid status rejected', await fails(boss, `select admin_update_problem($1, 'bogus', null)`, [pid], 'Invalid status'));
+for (let i = 0; i < 8; i++) await as(buyer2, `select submit_problem('idea', 'suggestion number ${i}')`);
+ok('problem: 10 per day then rate limited', (await as(buyer2, `select count(*) c from problem_reports`)).rows[0].c == 8 && !(await fails(buyer2, `select submit_problem('idea', 'ninth suggestion')`, []))
+  && !(await fails(buyer2, `select submit_problem('idea', 'tenth suggestion')`, [])) && await fails(buyer2, `select submit_problem('idea', 'eleventh suggestion')`, [], 'Too many reports'));
 
 // --- admin tools
 ok('non-admin cannot grant membership', await fails(buyer, `select admin_grant_membership($1, 30)`, [buyer], 'Admin only'));

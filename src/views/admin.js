@@ -27,8 +27,9 @@ export async function viewAdmin($app) {
     sb.from('reports').select('*, reporter:profiles!reports_reporter_id_fkey(display_name)').eq('resolved', false).order('created_at'),
     sb.from('private_profiles').select('id, strikes, member_until, is_admin, profile:profiles!private_profiles_id_fkey(display_name, created_at)').order('id').limit(200),
   ]);
+  const { count: openProblems } = await sb.from('problem_reports').select('id', { count: 'exact', head: true }).neq('status', 'resolved');
   const ul = (users.data || []).sort((a, b) => (b.profile?.created_at || '').localeCompare(a.profile?.created_at || ''));
-  $app.innerHTML = `<h1>Admin</h1><h2>Pending memberships</h2>
+  $app.innerHTML = `<h1>Admin</h1><p><a class="btn ${openProblems ? '' : 'sec'}" href="#/problems">🛠 Problem reports${openProblems ? ` (${openProblems} open)` : ''}</a></p><h2>Pending memberships</h2>
     ${reqs.data?.length ? `<table>${reqs.data.map((r) => `<tr><td>${esc(r.user?.display_name)}</td><td>${esc(r.reference)}</td><td>
       <button class="btn ok" data-ap="${r.id}">Approve 30d</button> <button class="btn sec" data-rj="${r.id}">Reject</button></td></tr>`).join('')}</table>` : '<p class="muted">None</p>'}
     <h2 style="margin-top:1.2rem">Open reports</h2>

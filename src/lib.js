@@ -7,7 +7,7 @@ export const PRICE = import.meta.env.VITE_MEMBER_PRICE || '5';
 export const configured = !!(URL_ && KEY);
 export const sb = configured ? createClient(URL_, KEY) : null;
 
-export const state = { user: null, me: null, cat: null, inv: null, fx: 0.0085, fxSrc: 'default' };
+export const state = { user: null, me: null, avatar: null, cat: null, inv: null, fx: 0.0085, fxSrc: 'default' };
 
 // ---------- small helpers ----------
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -164,10 +164,12 @@ export async function loadFx(force = false) {
 
 // ---------- auth + profile ----------
 export async function loadMe() {
-  state.me = null; state.inv = null;
+  state.me = null; state.inv = null; state.avatar = null;
   if (!state.user) return;
   const { data } = await sb.from('private_profiles').select('*').eq('id', state.user.id).maybeSingle();
   state.me = data;
+  const { data: pr } = await sb.from('profiles').select('avatar_url').eq('id', state.user.id).maybeSingle();   // my chosen picture (falls back to the Google photo)
+  state.avatar = pr?.avatar_url || null;
 }
 export const signIn = guard(async () => {
   const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } });
@@ -245,6 +247,6 @@ export function enlarge(c) {
 export function avatarHtml(size = 'md') {
   const u = state.user; if (!u) return '';
   const name = u.user_metadata?.full_name || state.me?.display_name || u.email || '?';
-  const pic = u.user_metadata?.avatar_url || u.user_metadata?.picture;
+  const pic = state.avatar || u.user_metadata?.avatar_url || u.user_metadata?.picture;
   return `<span class="av ${size}">${esc(String(name).trim()[0]?.toUpperCase() || '?')}${pic ? `<img src="${esc(pic)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
 }

@@ -15,6 +15,8 @@ import { viewSettings } from './views/settings.js';
 import { viewListing } from './views/listing.js';
 import { viewSell } from './views/sell.js';
 import { viewMembership, viewAdmin } from './views/admin.js';
+import { viewReport } from './views/report.js';
+import { viewProblems } from './views/problems.js';
 
 const $app = document.getElementById('app');
 const $top = document.getElementById('top');
@@ -39,7 +41,7 @@ const MENU = [
   ['explore', '🧭', 'Explore', '#/explore'],
 ];
 // Sell and Scan are not in this bar: Sell is on the My listings page and cards, Scan is on Home and My collection. Membership, Settings and Admin live under My account (top right)
-const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore', sell: 'mylistings', scan: 'inventory', membership: 'account', settings: 'account', admin: 'account', shared: 'inventory' }[page] || page || 'home');
+const menuKey = (page) => ({ listing: 'market', set: 'explore', card: 'explore', sell: 'mylistings', scan: 'inventory', membership: 'account', settings: 'account', admin: 'account', report: 'account', problems: 'account', shared: 'inventory' }[page] || page || 'home');
 const ICON = {
   user: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
   cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.1l2-8H6.4"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
@@ -99,6 +101,8 @@ async function route() {
       case 'sell': await viewSell(target, arg); break;
       case 'membership': location.replace('#/account'); break;
       case 'admin': await viewAdmin(target); break;
+      case 'report': await viewReport(target); break;
+      case 'problems': await viewProblems(target); break;
       default: await viewHome(target);
     }
   } catch (e) { if (ok()) $app.innerHTML = `<div class="notice err">${esc(e.message || e)}</div>`; }
