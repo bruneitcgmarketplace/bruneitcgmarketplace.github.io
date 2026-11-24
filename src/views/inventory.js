@@ -38,7 +38,7 @@ export async function viewInventory($app) {
         <select id="set"><option value="">All sets</option>${sets.map((s) => `<option value="${s}" ${f.set === s ? 'selected' : ''}>${esc(s.toUpperCase() + ' · ' + setName(s))}</option>`).join('')}</select>
         <select id="sort">${[['new', 'Newest added'], ['value', 'Value'], ['code', 'Card code'], ['qty', 'Quantity'], ['name', 'Name']].map(([k, l]) => `<option value="${k}" ${f.sort === k ? 'selected' : ''}>Sort: ${l}</option>`).join('')}</select></div></div>
       ${!st.unique ? `<div class="panel center"><p>Your inventory is empty.</p><p class="muted">Add cards by search or scan them with your camera.</p><div class="row tight" style="justify-content:center"><button class="btn" id="add2">+ Add card</button><a class="btn sec" href="#/scan">Scan</a></div></div>` : ''}
-      ${view === 'grid' ? `<div class="grid">${rows.map((r) => gridCell(r, listed)).join('')}</div>` : `<div class="panel nopad">${rows.map((r) => listRow(r, listed)).join('')}</div>`}
+      ${view !== 'list' ? `<div class="grid${view === 'tiles' ? ' tiles' : ''}">${rows.map((r) => gridCell(r, listed)).join('')}</div>` : `<div class="panel nopad">${rows.map((r) => listRow(r, listed)).join('')}</div>`}
       ${rows.length < st.unique ? `<p class="muted">Showing ${rows.length} of ${st.unique} unique cards.</p>` : ''}`;
     bind(); updSel();
   };
@@ -68,7 +68,7 @@ export async function viewInventory($app) {
     const ls = $('#listsel'); if (ls) ls.onclick = guard(() => openListAll([...sel]));
     const sa = $('#selall'); if (sa) sa.onclick = () => { if (shown.length && shown.every((r) => sel.has(r))) shown.forEach((r) => sel.delete(r)); else shown.forEach((r) => sel.add(r)); draw(); };
     $('#share').onclick = guard(() => openShareSheet(state.me?.display_name ? state.me.display_name + '’s' : 'my'));
-    $('#vm').onclick = () => { localStorage.setItem('view_inv', view === 'list' ? 'grid' : 'list'); viewInventory($app); };
+    $('#vm').onclick = () => { localStorage.setItem('view_inv', { list: 'grid', grid: 'tiles', tiles: 'list' }[view] || 'list'); viewInventory($app); };
     const addCard = () => cardPicker(guard(async (c) => { await invAdjust(c.ref, 1); toast(`${c.code} added`); draw(); }), { title: 'Add to inventory' });
     $('#add').onclick = addCard; const a2 = $('#add2'); if (a2) a2.onclick = addCard;
     $app.querySelectorAll('[data-ref]').forEach((el) => {

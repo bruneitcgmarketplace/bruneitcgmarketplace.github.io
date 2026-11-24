@@ -22,7 +22,7 @@ export async function viewOrders($app, opts = {}) {
   const uid = state.user.id;
   const only = opts.only || null;                       // 'selling' = the My listings page
   const tab = only || sessionStorage.getItem('otab') || 'buying';
-  $app.innerHTML = `<div class="head"><h1>${only ? 'My listings' : 'Orders'}</h1><div class="row tight"><button class="btn sec" id="ofb">⚙ Filters</button><button class="btn sec" id="rf">↻</button></div></div>
+  $app.innerHTML = `<div class="head"><h1>${only ? 'My listings' : 'Orders'}</h1><div class="row tight"><div class="vsw" id="ovw"><button data-v="list" aria-label="List">☰</button><button data-v="grid" aria-label="Grid">▦</button><button data-v="tiles" aria-label="Tiles">▪▪▪</button></div><button class="btn sec" id="ofb">⚙ Filters</button><button class="btn sec" id="rf">↻</button></div></div>
     ${state.me?.strikes ? `<div class="notice err">You have ${state.me.strikes} strike(s). At 3 you are blocked from bidding, buying and listing.</div>` : ''}
  ${only ? '<p><a class="btn" href="#/sell">+ New listing</a></p>' : ''}
     <div class="seg" ${only ? 'style="display:none"' : ''}><a data-t="buying" class="${tab === 'buying' ? 'on' : ''}">Buying</a><a data-t="selling" class="${tab === 'selling' ? 'on' : ''}">Selling</a><a data-t="sold" class="${tab === 'sold' ? 'on' : ''}">Sold history</a></div>
@@ -30,6 +30,10 @@ export async function viewOrders($app, opts = {}) {
   $app.querySelectorAll('.seg a').forEach((a) => (a.onclick = () => { sessionStorage.setItem('otab', a.dataset.t); viewOrders($app); }));
   $app.querySelector('#rf').onclick = () => viewOrders($app, opts);
   const body = $app.querySelector('#body');
+  let ov = localStorage.getItem('view_ord') || 'list';
+  const setOv = () => { body.className = 'ov-' + ov; $app.querySelectorAll('#ovw button').forEach((b) => b.classList.toggle('on', b.dataset.v === ov)); };
+  $app.querySelectorAll('#ovw button').forEach((b) => (b.onclick = () => { ov = b.dataset.v; localStorage.setItem('view_ord', ov); setOv(); }));
+  setOv();
   const sel = '*, seller:profiles!listings_seller_id_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)';
 
   const LST = new Map();
@@ -146,3 +150,4 @@ export async function viewOrders($app, opts = {}) {
     toast(`Report ready: ${m.sum.n} order${m.sum.n > 1 ? 's' : ''}`);
   })));
 }
+

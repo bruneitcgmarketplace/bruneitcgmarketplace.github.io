@@ -73,6 +73,7 @@ export async function viewMarket($app, setUnsub) {
     draw();
   }
   $app.querySelector('#seller').onclick = sellerSheet;
+  $app.querySelectorAll('#vsw button').forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('view_mkt', view); paint(); }));
   function paint() {
     const el = $app.querySelector('#list'); if (!el) return;
     const sort = $app.querySelector('#sort').value;

@@ -338,3 +338,12 @@ img.xs.ph { width:36px; height:50px; border-radius:4px; object-fit:cover; flex:0
 .sli{display:flex;align-items:center;gap:.6rem;padding:.55rem .7rem;border-bottom:1px solid var(--line);cursor:pointer}.sli:last-child{border:0}
 .sli input{width:1.2rem;height:1.2rem;margin:0;flex:none}.sli .sn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #seller{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Orders / My listings views (list = current rows) */
+#body.ov-grid .order,#body.ov-tiles .order{display:block}
+#body.ov-grid,#body.ov-tiles{display:grid;gap:.5rem;grid-template-columns:1fr 1fr}
+#body.ov-tiles{grid-template-columns:repeat(3,1fr)}
+#body.ov-grid>*:not(.order),#body.ov-tiles>*:not(.order){grid-column:1/-1}
+#body.ov-grid .order .oimg img,#body.ov-tiles .order .oimg img{width:100%;height:auto;aspect-ratio:5/7;object-fit:cover}
+#body.ov-tiles .order .grow>*:not(:first-child),#body.ov-tiles .order .grow .chip{display:none}
+#body.ov-tiles .order .grow>div:first-child b{font-size:.75rem}
