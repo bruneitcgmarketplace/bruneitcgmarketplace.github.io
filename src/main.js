@@ -74,6 +74,15 @@ function renderChrome(page) {
   const on = $top.querySelector('.menu-bar a.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
+// a banned or suspended user can still browse, so tell them why nothing else works
+function accountNotice() {
+  const m = state.me; if (!m || m.is_admin) return null;
+  const d = document.createElement('div'); d.className = 'notice err';
+  if (m.banned) d.textContent = 'Your account is banned' + (m.banned_reason ? ': ' + m.banned_reason : '') + '. You can browse, but you cannot list, buy, bid or change your collection.';
+  else if (m.suspended_until && new Date(m.suspended_until) > new Date()) d.textContent = 'Your account is suspended until ' + new Date(m.suspended_until).toLocaleString() + (m.suspended_reason ? ' (' + m.suspended_reason + ')' : '') + '. You can browse, but you cannot list, buy, bid or change your collection.';
+  else return null;
+  return d;
+}
 let unsub = null, seq = 0;
 async function route() {
   const my = ++seq;
@@ -87,7 +96,7 @@ async function route() {
   const ok = () => my === seq; // drop stale async renders
   try {
     const target = document.createElement('div'); // per-route container: a slow stale render can't overwrite the current page
-    $app.replaceChildren(target);
+    $app.replaceChildren(...[accountNotice(), target].filter(Boolean));
     switch (page) {
       case 'inventory': await viewInventory(target); break;
       case 'explore': await viewExplore(target); break;

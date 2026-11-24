@@ -299,3 +299,14 @@ img.xs.ph { width:36px; height:50px; border-radius:4px; object-fit:cover; flex:0
 
 .tile .sline{font-size:.7rem;line-height:1.2;margin-top:.15rem;display:flex;flex-wrap:wrap;gap:.2rem;align-items:center;min-width:0}
 .tile .sline .sn{max-width:7.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+
+/* admin users: search, filters, cards */
+.ufilters{margin:.4rem 0 .6rem}.ufilters input{width:100%;box-sizing:border-box;margin-bottom:.4rem}
+.ugrid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem}.ugrid select,.ugrid .btn{width:100%;box-sizing:border-box;height:2.3rem;min-height:0;padding:.2rem .5rem;font-size:.85rem;margin:0}
+.ucard{background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;padding:.6rem .7rem;margin:.45rem 0}
+.ucard.is-banned{border-color:#d33;background:#fff5f5}.ucard.is-suspended,.ucard.is-blocked{border-color:#e0a030;background:#fffaf0}
+.ucard .uh{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center}.ucard .um{font-size:.8rem;margin:.15rem 0}
+.ucard .ur{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:.2rem 0}.ucard .stepper button:disabled{opacity:.35}
+.ucard summary{cursor:pointer;color:var(--accent,#c0272d);font-weight:700;font-size:.85rem;margin-top:.3rem}
+.uact{display:flex;flex-wrap:wrap;gap:.35rem;margin:.45rem 0}.ust{font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:999px}
+.ust.bad{background:#d33;color:#fff}.ust.warn{background:#ffe3a8;color:#5a3b00}.btn.warnb{background:#e09a1a;color:#fff;border-color:#e09a1a}

@@ -22,6 +22,7 @@ await db.exec(readFileSync(new URL('../10_avatar.sql', import.meta.url), 'utf8')
 await db.exec(readFileSync(new URL('../12_problem_reports.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../09_agreed_price.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../14_ratings_tags.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../15_moderation.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -291,6 +292,49 @@ ok('new link differs after re-share', (await as(seller, `select share_inventory(
   await as(boss, `select set_user_tag($1, 'moderator', false)`, [seller]);
   ok('admin can remove a tag', (await as(null, `select tag from user_tags where user_id = $1`, [seller])).rows.map((r) => r.tag).join() === 'verified');
   ok('a tag does not make a user admin', !(await admin(`select is_admin(${"'" + seller + "'"}) a`)).rows[0].a);
+}
+
+// --- moderation
+{
+  const v = await mk('victim@x.com'), v2 = await mk('victim2@x.com'), clean = await mk('clean@x.com'), other = await mk('other@x.com');
+  for (const u of [v, v2, clean, other]) await as(u, `select set_whatsapp('6737123456')`);
+  const vl = await lst(v, { type: 'buy_now', price: 5 });
+  ok('normal user cannot moderate', await fails(seller, `select admin_ban($1, 'x')`, [v], 'Admin only') && await fails(seller, `select admin_suspend($1, 3, 'x')`, [v], 'Admin only') && await fails(seller, `select admin_adjust_strikes($1, 1)`, [v], 'Admin only') && await fails(seller, `select admin_delete_user($1)`, [v], 'Admin only'));
+  ok('admin cannot target themselves or another admin', await fails(boss, `select admin_ban($1)`, [boss], 'own account') && await fails(boss, `select admin_delete_user($1)`, [boss], 'own account'));
+  await admin(`update private_profiles set is_admin = true where id = $1`, [other]);
+  ok('admins cannot be banned', await fails(boss, `select admin_ban($1)`, [other], 'admins cannot be'));
+  await admin(`update private_profiles set is_admin = false where id = $1`, [other]);
+  ok('strike +1 twice then -1', (await as(boss, `select admin_adjust_strikes($1, 1, 'rude') s`, [v])).rows[0].s === 1 && (await as(boss, `select admin_adjust_strikes($1, 1) s`, [v])).rows[0].s === 2 && (await as(boss, `select admin_adjust_strikes($1, -1) s`, [v])).rows[0].s === 1);
+  ok('strikes never go below 0', (await as(boss, `select admin_adjust_strikes($1, -5) s`, [v])).rows[0].s === 0);
+  ok('suspension needs 1 to 365 days', await fails(boss, `select admin_suspend($1, 0)`, [v], '1 to 365') && await fails(boss, `select admin_suspend($1, 400)`, [v], '1 to 365'));
+  await as(boss, `select admin_suspend($1, 7, 'spam')`, [v]);
+  ok('suspended user cannot list or buy', await fails(v, `select create_listing($1::jsonb)`, [JSON.stringify({ ...card, type: 'buy_now', price: 5 })], 'suspended until') && await fails(v, `select buy_now($1)`, [bn], 'suspended until'));
+  ok('suspension cancels active listings', (await admin(`select status from listings where id = $1`, [vl])).rows[0].status === 'cancelled');
+  ok('suspended user can still read', (await as(v, `select count(*)::int c from listings`)).rows.length === 1);
+  await admin(`update private_profiles set suspended_until = now() - interval '1 minute' where id = $1`, [v]);
+  ok('expired suspension no longer blocks', !!(await lst(v, { type: 'buy_now', price: 5 })));
+  await as(boss, `select admin_suspend($1, 3)`, [v]); await as(boss, `select admin_unsuspend($1)`, [v]);
+  ok('lifting a suspension restores access', !!(await lst(v, { type: 'buy_now', price: 5 })));
+  await as(boss, `select admin_ban($1, 'scam')`, [v]);
+  ok('banned user is refused everything, with the reason', await fails(v, `select create_listing($1::jsonb)`, [JSON.stringify({ ...card, type: 'buy_now', price: 5 })], 'banned: scam') && await fails(v, `select inventory_adjust('op01-1', 1)`, [], 'banned') && await fails(v, `select set_whatsapp('6737123456')`, [], 'banned'));
+  ok('ban cancelled their active listings', (await admin(`select count(*)::int c from listings where seller_id = $1 and status = 'active'`, [v])).rows[0].c === 0);
+  await as(boss, `select admin_unban($1)`, [v]);
+  ok('unban restores access', !!(await lst(v, { type: 'buy_now', price: 5 })));
+  ok('admin is never blocked by the checks', !!(await as(boss, `select require_user() u`)).rows[0].u);
+  ok('actions are logged for admins only', (await as(boss, `select count(*)::int c from admin_actions`)).rows[0].c >= 8 && (await as(seller, `select count(*)::int c from admin_actions`)).rows[0].c === 0);
+
+  // delete: clean user is removed completely, a user with history is anonymised
+  ok('delete removes a user with no history completely', (await as(boss, `select admin_delete_user($1) r`, [clean])).rows[0].r === 'deleted' && (await admin(`select count(*)::int c from profiles where id = $1`, [clean])).rows[0].c === 0);
+  await as(v2, `select inventory_adjust('op01-1', 2)`);
+  const vh = await lst(v2, { type: 'buy_now', price: 9 });
+  await as(buyer2, `select buy_now($1)`, [vh]);
+  ok('delete refused while a deal is on hold', await fails(boss, `select admin_delete_user($1)`, [v2], 'on hold'));
+  await as(v2, `select mark_sold($1)`, [vh]);
+  ok('delete with history anonymises and blocks the user', (await as(boss, `select admin_delete_user($1) r`, [v2])).rows[0].r === 'anonymised');
+  const dv = (await admin(`select p.display_name, p.avatar_url, pp.whatsapp, pp.banned from profiles p join private_profiles pp on pp.id = p.id where p.id = $1`, [v2])).rows[0];
+  ok('anonymised user: name, contact and inventory gone, banned', dv.display_name === 'Deleted user' && dv.whatsapp === null && dv.banned === true && (await admin(`select count(*)::int c from inventory where user_id = $1`, [v2])).rows[0].c === 0);
+  ok('their sold deal stays in the buyer\'s history', (await as(buyer2, `select status from listings where id = $1`, [vh])).rows[0].status === 'sold');
+  ok('anonymised user cannot act', await fails(v2, `select inventory_adjust('op01-1', 1)`, [], 'banned'));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
