@@ -109,6 +109,7 @@ export async function viewExplore($app) {
     if (f.kw.length) add(f.kw.join(', '), () => (f.kw = []));
     if (f.own !== 'all') add(f.own === 'owned' ? 'Owned' : 'Missing', () => (f.own = 'all'));
     if (f.sale) add('For sale now', () => (f.sale = false));
+    if (f.sort !== 'new') add('Sort: ' + SORTS.find((x) => x[0] === f.sort)[1], () => (f.sort = 'new'));
     return out;
   };
 
@@ -119,7 +120,7 @@ export async function viewExplore($app) {
 
   const draw = async () => {
     save(); await ensureData();
-    const n = activeCount(f), filtering = n > 0 || f.q.trim() !== '';
+    const n = activeCount(f), filtering = n > 0 || f.q.trim() !== '' || f.sort !== 'new';
     const ch = chips();
     let body = '';
     if (!filtering) {
@@ -133,12 +134,13 @@ export async function viewExplore($app) {
         ${list.length > shown ? `<p class="center"><button class="btn sec" id="more">Show more (${list.length - shown} left)</button></p>` : ''}${list.length ? '' : '<div class="panel empty"><p>No cards match these filters.</p><button class="btn" id="reset2">Clear filters</button></div>'}`;
     }
     $app.innerHTML = `<div class="head"><h1>Explore</h1></div>
-      <div class="row tight" style="margin-bottom:.5rem"><input id="q" class="grow" placeholder="Search card name or code, e.g. Luffy, OP05-060" value="${esc(f.q)}" style="flex:1 1 220px"><button class="btn ${n ? '' : 'sec'}" id="fbtn">⚙ Filters${n ? ` (${n})` : ''}</button></div>
+      <div class="row tight" style="margin-bottom:.5rem"><input id="q" class="grow" placeholder="Search card name or code, e.g. Luffy, OP05-060" value="${esc(f.q)}" style="flex:1 1 220px"><select id="sortt" aria-label="Sort by" style="flex:0 1 190px">${SORTS.map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>↕ ${l}</option>`).join('')}</select><button class="btn ${n ? '' : 'sec'}" id="fbtn">⚙ Filters${n ? ` (${n})` : ''}</button></div>
       ${ch.length ? `<div class="fchips">${ch.map(([l], i) => `<button class="fchip" data-i="${i}">${esc(l)} ✕</button>`).join('')}<button class="fchip clear" id="clr">Clear all</button></div>` : ''}
       ${body}`;
     const $ = (s) => $app.querySelector(s);
     $('#q').oninput = () => { f.q = $('#q').value; shown = 60; clearTimeout(draw.t); draw.t = setTimeout(async () => { await draw(); const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }, 280); };
     $('#fbtn').onclick = openFilters;
+    $('#sortt').onchange = () => { f.sort = $('#sortt').value; shown = 60; draw(); };
     $app.querySelectorAll('.fchip[data-i]').forEach((b) => (b.onclick = () => { ch[+b.dataset.i][1](); shown = 60; draw(); }));
     const reset = () => { Object.assign(f, FRESH(), { q: f.q }); shown = 60; draw(); };
     if ($('#clr')) $('#clr').onclick = reset; if ($('#reset2')) $('#reset2').onclick = reset;
@@ -169,7 +171,6 @@ export async function viewExplore($app) {
         <div class="fsec"><h3>Effect keywords</h3><div class="fcs">${chipRow('kw', KEYWORDS.map((k) => [k, k]))}</div></div>
         ${state.user ? `<div class="fsec"><h3>My collection</h3><div class="fcs">${chipRow('own', [['all', 'All cards'], ['owned', 'Owned'], ['missing', 'Missing']], false)}</div></div>` : ''}
         <div class="fsec"><h3>Marketplace</h3><label class="inline"><input type="checkbox" id="sale" ${f.sale ? 'checked' : ''} style="width:auto"> Only cards for sale now</label></div>
-        <div class="fsec"><h3>Sort by</h3><select id="sort">${SORTS.map(([v, l]) => `<option value="${v}" ${f.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="fbar"><button class="btn sec" id="freset">Reset</button><button class="btn grow" id="fgo">Show ${preview} card${preview === 1 ? '' : 's'}</button></div>`;
       root.querySelectorAll('.fc').forEach((b) => (b.onclick = () => {
         const k = b.dataset.k, v = b.dataset.v;
