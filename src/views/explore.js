@@ -8,37 +8,48 @@ export async function viewMarket($app, setUnsub) {
   const cat = await loadCatalog();
   const p = qs();
   const f = JSON.parse(sessionStorage.getItem('filters') || '{}');
-  const type = p.get('type') ?? f.type ?? '';
+  let type = (p.get('type') ?? f.type) === 'auction' ? 'auction' : 'buy_now';   // two sub pages, no "All"
   $app.innerHTML = `<h1>Marketplace</h1><p class="muted">Cards for sale by collectors in Brunei. Buy now or bid in auctions.</p>
+    <div class="seg" id="mt"><a data-t="buy_now">Buy now</a><a data-t="auction">Auction</a></div>
     <div class="panel"><div class="row">
       <input id="q" placeholder="Search card code or name, e.g. OP01-001" value="${esc(f.q || '')}">
-      <select id="type"><option value="">All types</option><option value="buy_now">Buy now</option><option value="auction">Auctions</option></select>
-      <select id="sort"><option value="new">Newest</option><option value="end">Ending soon</option><option value="low">Price low</option><option value="high">Price high</option></select></div></div>
+      <select id="sort"></select></div></div>
     <div id="list" class="grid"><p class="muted">Loading…</p></div>`;
-  $app.querySelector('#type').value = type; $app.querySelector('#sort').value = f.sort || 'new';
+  const setTab = (pref) => {
+    $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));
+    const s = $app.querySelector('#sort');
+    s.innerHTML = (type === 'auction' ? '<option value="end">Ending soon</option>' : '') + '<option value="new">Newest</option><option value="low">Price low</option><option value="high">Price high</option>';
+    s.value = [...s.options].some((o) => o.value === pref) ? pref : (type === 'auction' ? 'end' : 'new');
+  };
+  setTab(f.sort);
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
-    const q = $app.querySelector('#q').value.trim(), t = $app.querySelector('#type').value, sort = $app.querySelector('#sort').value;
+    const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;
     sessionStorage.setItem('filters', JSON.stringify({ q, type: t, sort }));
     let req = sb.from('listings').select('*').or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').limit(120);
-    if (t) req = req.eq('type', t);
+    req = req.eq('type', t);
     if (q) {
       const s = q.replace(/[%,()]/g, ' ');
       const codes = cat.cards.filter((c) => c.en.toLowerCase().includes(q.toLowerCase())).map((c) => c.code);
       const uniq = [...new Set(codes)].slice(0, 60);
       req = req.or([`card_code.ilike.%${s}%`, `card_name.ilike.%${s}%`, uniq.length ? `card_code.in.(${uniq.join(',')})` : null].filter(Boolean).join(','));
     }
-    if (sort === 'end') req = req.eq('type', 'auction').order('ends_at');
-    else if (sort === 'low') req = req.order('price', { nullsFirst: false });
-    else if (sort === 'high') req = req.order('price', { ascending: false, nullsFirst: false });
-    else req = req.order('created_at', { ascending: false });
+    req = sort === 'end' ? req.order('ends_at') : req.order('created_at', { ascending: false });   // price sorts run below (auction price = current bid)
     const { data, error } = await req;
     const el = $app.querySelector('#list'); if (!el) return;
     if (error) return (el.innerHTML = `<div class="notice err">${esc(error.message)}</div>`);
-    el.innerHTML = data.length ? [...data].sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved')).map(tile).join('') : '<p class="muted">No listings match. <a href="#/sell">Sell a card</a></p>';
+    const rows = [...data];
+    if (sort === 'low') rows.sort((a, b) => listingPrice(a) - listingPrice(b)); else if (sort === 'high') rows.sort((a, b) => listingPrice(b) - listingPrice(a));
+    rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
+    el.innerHTML = rows.length ? rows.map(tile).join('') : `<p class="muted">${t === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} <a href="#/sell">Sell a card</a></p>`;
   };
   let t; $app.querySelector('#q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(load, 300); });
-  $app.querySelector('#type').onchange = load; $app.querySelector('#sort').onchange = load;
+  $app.querySelector('#sort').onchange = load;
+  $app.querySelectorAll('#mt a').forEach((a) => (a.onclick = () => {
+    if (a.dataset.t === type) return;
+    type = a.dataset.t; history.replaceState(null, '', `#/market?type=${type}`);
+    setTab(null); $app.querySelector('#list').innerHTML = '<p class="muted">Loading…</p>'; load();
+  }));
   load();
   // a card goes grey the moment another buyer clicks Buy now (and back to normal if the hold is released)
   if (setUnsub) {
