@@ -98,3 +98,10 @@ input:focus,select:focus,textarea:focus { border-color:var(--sanji); box-shadow:
 /* Plain text brand: One Piece TCG in the site font (overrides the earlier logo/aura experiments) */
 #top .brand { display:block; position:static; padding:0; margin:0 0 0 .2rem; background:none; border:0; animation:none; font-size:1.05rem; font-weight:800; letter-spacing:.01em; line-height:1.1; white-space:nowrap; }
 #top .brand .b1 { color:var(--luffy); } #top .brand .b2 { color:var(--fg); display:inline; }
+
+/* Mobile: all six menu items fit on one row (icon above label), no sideways scrolling */
+@media (max-width:759px) {
+  .menu-bar { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.2rem; overflow:visible; padding:.15rem .4rem .55rem; mask-image:none; -webkit-mask-image:none; scroll-snap-type:none; }
+  .menu-bar a { flex-direction:column; justify-content:center; gap:.15rem; padding:.4rem .1rem .35rem; font-size:.55rem; letter-spacing:-.02em; line-height:1.1; text-align:center; white-space:normal; min-width:0; border-radius:12px; }
+  .menu-bar a .ic { font-size:1.15rem; }
+}
