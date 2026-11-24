@@ -13,7 +13,7 @@ const SET_NAMES = JSON.parse(readFileSync(new URL('./set_names.json', import.met
 async function fetchSet(set) {
   for (let a = 0; a < 3; a++) {
     try {
-      const r = await fetch(`https://yuyu-tei.jp/sell/opc/s/${set}`, { headers: { 'User-Agent': UA } });
+      const r = await fetch(`${process.env.YUYUTEI_BASE || 'https://yuyu-tei.jp'}/sell/opc/s/${set}`, { headers: { 'User-Agent': UA } });
       if (r.status === 404) return [];
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return parseSet(await r.text(), set);

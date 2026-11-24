@@ -22,8 +22,10 @@ jobs:
           HOME_FEED_PREVIOUS_URL: https://bruneitcgmarketplace.github.io/home-feed.json
       - name: Refresh Yuyutei card prices (keeps the committed catalogue if the source fails)
         run: node tools/refresh_catalog.mjs
+        env:
+          YUYUTEI_BASE: https://yuyutei-relay.optcgbn.workers.dev
         continue-on-error: true
-        timeout-minutes: 8
+        timeout-minutes: 10
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
