@@ -38,5 +38,5 @@ for (const path of ['allSetCards', 'allSTCards', 'allPromoCards']) {
 const clean = (s) => { let t = s; for (;;) { const n = t.replace(/\s*\([^)]*\)\s*$/, ''); if (n === t || !n) return t; t = n; } };
 const rows = cards.map((c) => { const num = c.id.split('-').pop(); const [col, typ] = info.get(c.code) || ['', '']; return [num, c.set, c.code, c.name, c.rarity, c.price_jpy || 0, clean(en.get(c.code) || ''), col, typ]; });
 const sets = {}; for (const s of new Set(rows.map((r) => r[1]))) sets[s] = SET_NAMES[s] || s.toUpperCase();
-writeFileSync(new URL('../public/catalog.json', import.meta.url), JSON.stringify({ updated: new Date().toISOString().slice(0, 10), sets, cards: rows }));
+writeFileSync(new URL('../public/catalog.json', import.meta.url), JSON.stringify({ updated: new Date().toISOString(), sets, cards: rows }));
 console.log('cards', rows.length, 'sets', Object.keys(sets).length, 'no English name', rows.filter((r) => !r[6]).length);

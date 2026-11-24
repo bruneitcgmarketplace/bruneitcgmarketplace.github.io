@@ -1,5 +1,14 @@
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const count = (n) => Number.isSafeInteger(n) && n >= 0 ? n.toLocaleString('en-GB') : '—';
+// Brunei time (GMT+8) for a price/refresh stamp. ISO timestamp -> '24 Nov 2026, 14:05 GMT+8'; old date-only value -> date with a note.
+export function fmtBrunei(iso) {
+  if (!iso) return 'not available';
+  const s = String(iso);
+  if (!s.includes('T')) return s + ' (time not recorded)';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Brunei', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(d) + ' GMT+8';
+}
 export function renderHomeStats({signed,totalCards,listingCount,auctionCount}) {
   return `<div class="stats home-stats">
     <a class="stat" href="#/inventory"><b>${signed ? count(totalCards) : '—'}</b><span>Total card collection</span><small>${signed ? totalCards == null ? 'Temporarily unavailable' : 'Cards in your collection' : 'Sign in to view your cards'}</small></a>

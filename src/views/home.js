@@ -1,6 +1,6 @@
 import '../home.css';
 import { state, sb, esc, loadCatalog, loadInv, tile, bindLogin, rpc } from '../lib.js';
-import { renderHomeStats, renderHomeFeeds } from '../home-content.js';
+import { renderHomeStats, renderHomeFeeds, fmtBrunei } from '../home-content.js';
 
 export async function viewHome($app) {
   await loadCatalog();
@@ -35,10 +35,11 @@ export async function viewHome($app) {
       const totalCards = inv ? [...inv.values()].reduce((sum,q) => sum + (Number.isSafeInteger(q) && q > 0 ? q : 0),0) : null;
       const hero = signed ? `<div class="hero"><div class="muted">Brunei One Piece TCG</div><h1>Your One Piece hub</h1><p class="muted">Manage your cards, discover listings and follow the latest updates.</p><div class="row tight"><a class="btn" href="#/inventory">Open inventory</a><a class="btn sec" href="#/scan">Scan cards</a></div></div>` : `<div class="hero"><div class="muted">Welcome</div><h1>Buy, sell and auction One Piece cards in Brunei</h1><p class="muted">Free to buy, sell and bid. List cards with Buy now or run an auction.</p><button class="btn" id="login-btn">Sign in with Google</button></div>`;
       const html = `${hero}${renderHomeStats({signed,totalCards,listingCount:listingCount.error ? null : listingCount.count,auctionCount:auctionCount.error ? null : auctionCount.count})}
+        <p class="feed-meta price-stamp">Card prices last refreshed: <b>${esc(fmtBrunei(state.cat?.updated))}</b> (Brunei time). Prices refresh every 3 hours.</p>
         ${row('Live listing',listings,'#/market?type=buy_now','No buy-now listings yet. Sell a card to get started.')}
         ${row('Live auction',auctions,'#/market?type=auction','No live auctions right now. Check back soon.')}
         ${renderHomeFeeds(feed)}
-        <p class="feed-meta home-refresh-note">Live counts refresh every minute. News, releases and Yuyutei sources refresh automatically every six hours. Reference prices are Japanese shop prices, not guaranteed local values.</p>`;
+        <p class="feed-meta home-refresh-note">Live counts refresh every minute. News, releases and Yuyutei sources refresh automatically every three hours. Reference prices are Japanese shop prices, not guaranteed local values.</p>`;
       if (html !== lastHtml) { $app.innerHTML = html; lastHtml = html; bindLogin($app); }
     } catch (error) {
       if ($app.isConnected && !lastHtml) $app.innerHTML = `<div class="notice err">Home could not load. ${esc(error.message || error)}</div>${renderHomeFeeds(feed)}`;

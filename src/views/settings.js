@@ -1,4 +1,5 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadMe, loadCatalog, loadInv, loadFx, isMember, needLogin, bindLogin, signOut, refBnd, PRICE } from '../lib.js';
+import { fmtBrunei } from '../home-content.js';
 
 export async function viewSettings($app) {
   const cat = await loadCatalog();
@@ -11,9 +12,9 @@ export async function viewSettings($app) {
       <p class="muted">Strikes: ${me?.strikes ?? 0} of 3</p></div>
 ` : needLogin('manage your profile')}
     <div class="panel"><h2>Prices</h2><p>Reference prices are Yuyutei (Japan shop) selling prices in JPY, converted to BND using the SGD rate because BND is pegged to SGD.</p>
-      <p>Rate: <b>${state.fx.toFixed(5)}</b> BND per JPY <span class="muted">(${esc(state.fxSrc)})</span><br>Prices updated: <b>${esc(cat.updated)}</b></p>
+      <p>Rate: <b>${state.fx.toFixed(5)}</b> BND per JPY <span class="muted">(${esc(state.fxSrc)})</span><br>Prices last refreshed: <b>${esc(fmtBrunei(cat.updated))}</b> (Brunei time)</p>
       <button class="btn sec" id="px-r">Refresh prices</button>
-      <p class="muted" style="margin:.4rem 0 .8rem">Reloads the latest published Yuyutei prices and the live exchange rate. The site re-reads Yuyutei every 6 hours.</p>
+      <p class="muted" style="margin:.4rem 0 .8rem">Reloads the latest published Yuyutei prices and the live exchange rate. The site re-reads Yuyutei every 3 hours.</p>
       <label class="inline"><input type="checkbox" id="hd" ${localStorage.getItem('hd_images') !== '0' ? 'checked' : ''} style="width:auto"> Sharp card images (uses more mobile data)</label>
       <label>Manual rate override (BND per JPY, empty = automatic)</label><div class="row tight"><input id="fx" inputmode="decimal" value="${esc(localStorage.getItem('fx_manual') || '')}" style="max-width:160px"><button class="btn sec" id="fx-s">Apply</button></div></div>
     ${signed ? `<div class="panel"><h2>Data</h2><button class="btn sec" id="exp">Export inventory (CSV)</button></div>` : ''}
