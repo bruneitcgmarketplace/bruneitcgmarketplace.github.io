@@ -26,16 +26,18 @@ export async function viewHome($app) {
       const [inv, listings, auctions, listingCount, auctionCount, soldSum] = await Promise.all([
         signed ? loadInv(true).catch(() => null) : null,
         sb.from('listings').select('*').eq('status','active').eq('type','buy_now').order('created_at',{ascending:false}).limit(600),
-        sb.from('listings').select('*').eq('status','active').eq('type','auction').gt('ends_at',now).order('ends_at').limit(8),
+        sb.from('listings').select('*').eq('status','active').eq('type','auction').gt('ends_at',now).order('ends_at').limit(100),
         sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','buy_now'),
         sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','auction').gt('ends_at',now),
         Promise.resolve(sb.rpc?.('public_sold_summary')).then((r) => r?.data ?? null, () => null),
         getFeed(),
       ]);
       if (!$app.isConnected) return;
-      // rarest first: secret/alt art/special > treasure > leader > SR > R > UC > C (then newest)
-      const RANK = (c) => { const r = c.rarity || ''; if (r.startsWith('P-')) return 95; return { SEC: 100, SP: 90, TR: 85, L: 70, SR: 60, R: 40, UC: 20, C: 10, P: 50 }[r] ?? 0; };
-      if (listings.data) { const idx = new Map(listings.data.map((l, i) => [l.id, i])); listings.data = [...listings.data].sort((a, b) => RANK(b) - RANK(a) || idx.get(a.id) - idx.get(b.id)); await primeMeta(listings.data); }
+      // most expensive first, whenever it was added (auctions: current bid, or starting bid when nobody has bid)
+      const worth = (l) => Number(l.type === 'auction' ? (l.current_bid ?? l.start_price) : l.price) || 0;
+      const byWorth = (rows) => { const idx = new Map(rows.map((l, i) => [l.id, i])); return [...rows].sort((a, b) => worth(b) - worth(a) || idx.get(a.id) - idx.get(b.id)); };
+      if (listings.data) { listings.data = byWorth(listings.data); await primeMeta(listings.data); }
+      if (auctions.data) auctions.data = byWorth(auctions.data);
       const totalCards = inv ? [...inv.values()].reduce((sum,q) => sum + (Number.isSafeInteger(q) && q > 0 ? q : 0),0) : null;
       const hero = signed ? `<div class="hero"><div class="muted">Brunei One Piece TCG</div><h1>Your One Piece hub</h1><p class="muted">Manage your cards, discover listings and follow the latest updates.</p><div class="row tight"><a class="btn" href="#/inventory">Open inventory</a><a class="btn sec" href="#/scan">Scan cards</a></div></div>` : `<div class="hero"><div class="muted">Welcome</div><h1>Buy, sell and auction One Piece cards in Brunei</h1><p class="muted">Free to buy, sell and bid. List cards with Buy now or run an auction.</p><button class="btn" id="login-btn">Sign in with Google</button></div>`;
       const soldN = soldSum && Number.isFinite(soldSum.n) ? soldSum : null;
