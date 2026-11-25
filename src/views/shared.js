@@ -102,6 +102,17 @@ export async function viewShared($app, token) {
 
 
 // One-page picture of many cards: pics = [{ url, qty, price }]. Returns a high-resolution JPEG blob (every card on a single image).
+let fontsP = null;
+function loadFonts() {   // heavy condensed display face from Google Fonts; falls back to Impact / Arial Narrow if offline
+  if (!fontsP) fontsP = Promise.race([(async () => {
+    for (const fam of ['Anton', 'Roboto+Condensed:wght@700']) {
+      const css = await (await fetch(`https://fonts.googleapis.com/css2?family=${fam}&display=swap`)).text();
+      const m = /font-family:\s*'([^']+)'[^}]*?font-weight:\s*(\d+)[^}]*?src:\s*url\(([^)]+)\)/s.exec(css); if (!m) continue;
+      const ff = new FontFace(m[1], `url(${m[3]})`, { weight: m[2] }); await ff.load(); document.fonts.add(ff);
+    }
+  })().catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
+  return fontsP;
+}
 export async function snapshotImage(title, sub, pics, link = '') {
   const n = pics.length, MAXC = 1000; pics = pics.slice(0, MAXC);
   const m = pics.length;
@@ -116,46 +127,54 @@ export async function snapshotImage(title, sub, pics, link = '') {
   W = Math.max(W, 1100);
   const ch = Math.round(cell * 1.4), x0 = Math.round((W - (cols * cell + (cols - 1) * gap)) / 2), rows = Math.ceil(m / cols);
   const size = cell <= 110 ? '100_140' : cell <= 210 ? '200_280' : '250_350';
+  await loadFonts();
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
   const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
-  // background
-  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1b2b52'); bg.addColorStop(1, '#0d1630'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  // header band
-  const hg = g.createLinearGradient(0, 0, W, head); hg.addColorStop(0, '#c1121f'); hg.addColorStop(0.55, '#8c0d17'); hg.addColorStop(1, '#14213d'); g.fillStyle = hg; g.fillRect(0, 0, W, head);
-  g.fillStyle = '#ffc83d'; g.fillRect(0, head, W, Math.max(6, Math.round(W / 300)));
-  const u = W / 1200;
-  g.fillStyle = '#ffd966'; g.font = `700 ${Math.round(22 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText('BRUNEI ONE PIECE TCG', x0, Math.round(head * 0.26), W - 2 * x0);
-  g.fillStyle = '#fff'; g.font = `800 ${Math.round(52 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(title, x0, Math.round(head * 0.62), W - 2 * x0 - Math.round(260 * u));
-  g.fillStyle = '#ffe9b0'; g.font = `500 ${Math.round(26 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(sub, x0, Math.round(head * 0.86), W - 2 * x0 - Math.round(260 * u));
+  // white poster: One Piece colours (red / straw-hat yellow / ocean blue / navy), heavy condensed type
+  const NAVY = '#14213d', RED = '#c1121f', GOLD = '#f2b705', BLUE = '#1d5fa8', GREEN = '#2e8b57', ORANGE = '#e8731a';
+  const FONT = `"Anton", Impact, "Haettenschweiler", "Arial Narrow Bold", "Roboto Condensed", sans-serif`;
+  const BODY = `"Roboto Condensed", "Arial Narrow", "Segoe UI", Roboto, sans-serif`;
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  const u = W / 1200, band = Math.max(10, Math.round(14 * u));
+  const stripe = (y) => { const cs = [RED, GOLD, GREEN, ORANGE, BLUE], w = W / cs.length; cs.forEach((c, i) => { g.fillStyle = c; g.fillRect(Math.round(i * w), y, Math.ceil(w), band); }); };
+  stripe(0);
+  // frame
+  g.strokeStyle = NAVY; g.lineWidth = Math.max(4, Math.round(6 * u)); g.strokeRect(g.lineWidth / 2 + 2, band + 2, W - g.lineWidth - 4, H - band * 2 - 4);
+  g.fillStyle = RED; g.font = `400 ${Math.round(24 * u)}px ${FONT}`; g.fillText('★  BRUNEI ONE PIECE TCG  ★', x0, Math.round(head * 0.30), W - 2 * x0);
+  g.fillStyle = NAVY; g.font = `400 ${Math.round(70 * u)}px ${FONT}`; g.fillText(title.toUpperCase(), x0, Math.round(head * 0.68), W - 2 * x0 - Math.round(250 * u));
+  g.fillStyle = '#4b5563'; g.font = `700 ${Math.round(26 * u)}px ${BODY}`; g.fillText(sub, x0, Math.round(head * 0.9), W - 2 * x0 - Math.round(250 * u));
+  g.fillStyle = GOLD; g.fillRect(x0, Math.round(head * 0.95), W - 2 * x0, Math.max(5, Math.round(7 * u)));
   // count badge
-  const bw = Math.round(220 * u), bh = Math.round(100 * u), bx = W - x0 - bw, by = Math.round((head - bh) / 2);
-  g.fillStyle = '#ffc83d'; rr(bx, by, bw, bh, Math.round(18 * u)); g.fill();
-  g.fillStyle = '#14213d'; g.textAlign = 'center'; g.font = `800 ${Math.round(46 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(String(n), bx + bw / 2, by + Math.round(56 * u));
-  g.font = `600 ${Math.round(20 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(n === 1 ? 'CARD' : 'CARDS', bx + bw / 2, by + Math.round(86 * u)); g.textAlign = 'left';
+  const bw = Math.round(210 * u), bh = Math.round(112 * u), bx = W - x0 - bw, by = Math.round(head * 0.22);
+  g.fillStyle = RED; rr(bx, by, bw, bh, Math.round(14 * u)); g.fill();
+  g.strokeStyle = NAVY; g.lineWidth = Math.max(3, Math.round(4 * u)); rr(bx, by, bw, bh, Math.round(14 * u)); g.stroke();
+  g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = `400 ${Math.round(62 * u)}px ${FONT}`; g.fillText(String(n), bx + bw / 2, by + Math.round(70 * u));
+  g.fillStyle = GOLD; g.font = `400 ${Math.round(22 * u)}px ${FONT}`; g.fillText(n === 1 ? 'CARD' : 'CARDS', bx + bw / 2, by + Math.round(100 * u)); g.textAlign = 'left';
   // cards
   const load = (url) => new Promise((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
   const drawTag = (txt, x, y, fs, fill, ink, align) => {
-    g.font = `800 ${fs}px "Segoe UI", Roboto, sans-serif`; const w = g.measureText(txt).width + fs * 0.9, h = fs * 1.5, px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+    g.font = `400 ${fs}px "Anton", Impact, "Arial Narrow Bold", sans-serif`; const w = g.measureText(txt).width + fs * 0.9, h = fs * 1.5, px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
     g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = fs * 0.4; g.shadowOffsetY = fs * 0.12; g.fillStyle = fill; rr(px, y, w, h, h / 2); g.fill(); g.restore();
-    g.fillStyle = ink; g.fillText(txt, px + fs * 0.45, y + fs * 1.1);
+    g.fillStyle = ink; g.fillText(txt, px + fs * 0.45, y + fs * 1.12);
   };
   let next = 0;
   const worker = async () => { while (next < m) {
     const k = next++, p = pics[k], x = x0 + (k % cols) * (cell + gap), y = head + Math.round(cell * 0.2) + Math.floor(k / cols) * (ch + gap);
     const im = await load(p.url.replace(/\/(?:\d+_\d+|front)\//, `/${size}/`));
-    g.save(); g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = cell * 0.08; g.shadowOffsetY = cell * 0.025; g.fillStyle = '#2b3a5c'; rr(x, y, cell, ch, cell * 0.05); g.fill(); g.restore();
+    g.save(); g.shadowColor = 'rgba(20,33,61,.35)'; g.shadowBlur = cell * 0.07; g.shadowOffsetY = cell * 0.02; g.fillStyle = '#e5e7eb'; rr(x, y, cell, ch, cell * 0.05); g.fill(); g.restore();
     g.save(); rr(x, y, cell, ch, cell * 0.05); g.clip(); if (im) g.drawImage(im, x, y, cell, ch); g.restore();
+    g.strokeStyle = 'rgba(20,33,61,.55)'; g.lineWidth = Math.max(1, cell / 90); rr(x, y, cell, ch, cell * 0.05); g.stroke();
     const fs = Math.max(11, Math.round(cell * 0.14));
     if (p.qty) drawTag(p.qty, x + cell - fs * 0.25, y + fs * 0.25, fs, '#c1121f', '#fff', 'right');
-    if (p.price) drawTag(p.price, x + cell / 2, y + ch - fs * 1.75, fs, '#ffc83d', '#14213d', 'center');
+    if (p.price) drawTag(p.price, x + cell / 2, y + ch - fs * 1.75, fs, '#14213d', '#f2b705', 'center');
   } };
   await Promise.all(Array.from({ length: 8 }, worker));
   // footer
-  g.fillStyle = '#ffc83d'; g.fillRect(0, H - foot, W, Math.max(3, Math.round(W / 600)));
-  g.fillStyle = '#fff'; g.font = `600 ${Math.round(24 * u)}px "Segoe UI", Roboto, sans-serif`;
-  if (n > MAXC) g.fillText(`+${n - MAXC} more cards not shown`, x0, H - Math.round(foot * 0.62), W - 2 * x0);
-  g.fillStyle = '#ffd966'; g.fillText(link ? link.replace(/^https?:\/\//, '') : 'optcgmarketplace.github.io', x0, H - Math.round(foot * 0.28), W - 2 * x0);
+  stripe(H - band);
+  g.fillStyle = NAVY; g.font = `400 ${Math.round(26 * u)}px ${FONT}`;
+  if (n > MAXC) { g.fillStyle = RED; g.fillText(`+${n - MAXC} MORE CARDS NOT SHOWN`, x0, H - band - Math.round(foot * 0.62), W - 2 * x0); g.fillStyle = NAVY; }
+  g.fillText((link ? link.replace(/^https?:\/\//, '') : 'optcgmarketplace.github.io').toUpperCase(), x0, H - band - Math.round(foot * 0.3), W - 2 * x0);
   return await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
 }
 
