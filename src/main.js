@@ -66,7 +66,7 @@ function renderChrome(page) {
   const items = MENU;
   const n = signed ? cartIds().length : 0;
   $top.innerHTML = `<div class="top-row">
-      <a class="brand" href="#/"><span class="b1">One Piece</span> <span class="b2">TCG</span></a><span class="grow"></span>
+      <a class="brand" href="#/"><span class="b1">One Piece</span> <span class="b2">TCG</span><span class="betatag">BETA</span><small class="bnote">Customised for the Brunei market</small></a><span class="grow"></span>
       <a class="ic-btn ${cur === 'account' ? 'on' : ''}" href="#/account" aria-label="My account" title="My account">${signed ? avatarHtml('sm') : ICON.user}</a>
       <a class="ic-btn ${cur === 'cart' ? 'on' : ''}" href="#/cart" aria-label="View my cart" title="My cart">${ICON.cart}<span class="cart-n" id="cart-n" ${n ? '' : 'hidden'}>${n}</span></a>
     </div>
