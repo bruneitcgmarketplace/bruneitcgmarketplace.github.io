@@ -2,7 +2,7 @@ import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listin
 import { cardFilter } from './exploreSets.js';
 import { shareChoice } from './shared.js';
 import { fetchAll, catImg } from '../lib.js';
-import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
+import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
 const stChip = (l, uid, role) => {
@@ -58,7 +58,7 @@ export async function viewOrders($app, opts = {}) {
     const c = state.cat.byRef.get(l.card_ref);
     const price = listingPrice(l);
     let extra = '', ct = null;
-    if (l.status === 'reserved') {
+    if (l.status === 'reserved' && role !== 'buy') {
       ct = await contactOf(l);
       const rd = receiptData(l, c?.name || l.card_name);
       extra += `<div class="notice">${l.type === 'auction' ? 'Auction won' : role === 'sell' ? 'On hold: a buyer clicked Buy now' : 'On hold for you'}. ${role === 'sell' ? 'Contact the buyer on WhatsApp. After the meet-up and payment, tap Sold.' : 'Tell the seller you want to buy it.'}
@@ -110,8 +110,19 @@ export async function viewOrders($app, opts = {}) {
     const seen = new Set(), bidding = [];
     for (const b of bids.data || []) if (!seen.has(b.listing_id)) { seen.add(b.listing_id); bidding.push(b.listings); }
     const wonRows = won.data || [];
+    // held cards under the same seller share ONE 'Inform seller on WhatsApp' button
+    const held = new Map();
+    for (const l of wonRows) if (l.status === 'reserved') { const k = l.seller_id; if (!held.has(k)) held.set(k, []); held.get(k).push(l); }
+    const heldHtml = (await Promise.all([...held.values()].map(async (arr) => {
+      const ct = await contactOf(arr[0]);
+      const items = arr.map((l) => receiptData(l, state.cat.byRef.get(l.card_ref)?.name || l.card_name));
+      const total = items.reduce((a, d) => a + Number(d.price || 0), 0);
+      const sname = esc(arr[0].seller?.display_name || 'Seller');
+      return `<div class="notice"><b>On hold for you · Seller: ${sname}</b> · ${arr.length} card${arr.length > 1 ? 's' : ''} · ${bnd(total)}<br>Tell the seller you want to buy ${arr.length > 1 ? 'them' : 'it'}.
+        ${ct ? `<br><a class=\"btn sm-btn\" target=\"_blank\" rel=\"noopener\" href=\"${waUrl(ct.whatsapp, msgInformSellerMany(items))}\">💬 Inform seller on WhatsApp</a>` : ''}</div>`;
+    }))).join('');
     body.innerHTML = `<h2>Active bids</h2>${bidding.length ? (await Promise.all(bidding.map((l) => card(l, 'buy')))).join('') : '<p class="muted">No active bids. <a href="#/market?type=auction">Browse auctions</a></p>'}
-      <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${reportPanel('buy')}${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
+      <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${heldHtml}${reportPanel('buy')}${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
   } else if (tab === 'selling') {
     const [live, past] = await Promise.all([
       fetchAll(() => sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved']).order('created_at', { ascending: false }).order('id')),

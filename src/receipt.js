@@ -41,6 +41,10 @@ export function receiptData(l, name) {
 
 // buyer -> seller, right after Buy now
 export const msgInformSeller = (d) => `Hi ${d.seller}, I ${d.type === 'auction' ? 'won your auction for' : 'clicked Buy now on One Piece TCG for'} ${d.code} ${d.name} (${d.cond}) at ${money(d.price)}. Please keep it on hold for me.\nListing: ${d.url}\nWhen and where can we meet?`;
+// buyer -> one seller, several held cards in one message
+export const msgInformSellerMany = (ds) => ds.length === 1 ? msgInformSeller(ds[0]) :
+  `Hi ${ds[0].seller}, I clicked Buy now on One Piece TCG for ${ds.length} cards (${money(ds.reduce((a, d) => a + Number(d.price || 0), 0))} total). Please keep them on hold for me:\n` +
+  ds.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}${d.type === 'auction' ? ' (won auction)' : ''}\n${d.url}`).join('\n') + `\nWhen and where can we meet?`;
 // seller -> buyer, after Sold
 export const msgInformBuyer = (d) => `Hi ${d.buyer}, thank you! Your purchase of ${d.code} ${d.name} (${money(d.price)}${d.changed ? `, agreed price; listing price ${money(d.listing)}` : ''}) is now marked as sold and complete.\nReceipt no. ${d.no}. I am sending you the PDF receipt in this chat.\nListing: ${d.url}`;
 
