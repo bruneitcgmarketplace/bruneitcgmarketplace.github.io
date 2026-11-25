@@ -25,6 +25,7 @@ await db.exec(readFileSync(new URL('../14_ratings_tags.sql', import.meta.url), '
 await db.exec(readFileSync(new URL('../15_moderation.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../16_bulk_unlist.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../17_shared_market.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../18_public_sold.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -357,6 +358,24 @@ ok('new link differs after re-share', (await as(seller, `select share_inventory(
   ok('shared page lists the owner\'s marketplace cards', j.listed && j.listed[ref] && j.listed[ref].n >= 1 && !!j.owner_id);
   ok('shared contact needs sign-in', await fails(null, `select * from shared_contact($1)`, [tok], 'Sign in'));
   ok('shared contact rejects a bad link', await fails(buyer2, `select * from shared_contact($1)`, ['nope'], 'not valid'));
+}
+// --- public sold board
+{
+  const id = await lst(seller, { type: 'buy_now', price: 4 });
+  await as(buyer, `select buy_now($1)`, [id]);
+  await as(seller, `select mark_sold($1, 3.5)`, [id]);
+  const open = await lst(seller, { type: 'buy_now', price: 9.77 });
+  const rows = (await as(null, `select * from public_sold(1000, 0)`)).rows;
+  const r = rows.find((x) => Number(x.price) === 3.5);
+  ok('anyone can read sold deals with the final price', !!r && Number(r.listing_price) === 4);
+  ok('names are masked, never the real name', !!r && r.seller_name === 'U ***om' && r.buyer_name === 'U ***om' && !JSON.stringify(rows).includes('seller@x.com'));
+  ok('no ids or contact fields are exposed', !!r && !('id' in r) && !('seller_id' in r) && !('buyer_id' in r) && !('whatsapp' in r));
+  ok('unsold listings are not shown', !(await as(null, `select * from public_sold(1000, 0)`)).rows.some((x) => Number(x.price) === 9.77));
+  ok('mask: first 2 + last 2', (await as(null, `select mask_name('Norihkwan Rusli') m`)).rows[0].m === 'No***li');
+  ok('mask: short names are not exposed in full', (await as(null, `select mask_name('Ali') a, mask_name('') b, mask_name(null) c`)).rows[0].a === 'A***');
+  ok('summary counts sold deals', (await as(null, `select public_sold_summary() s`)).rows[0].s.n >= 1);
+  ok('paging offset works', (await as(null, `select count(*)::int c from public_sold(1000, 1000)`)).rows[0].c === 0);
+  await admin(`delete from listings where id = $1`, [open]);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
