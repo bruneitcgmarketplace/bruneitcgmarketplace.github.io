@@ -50,7 +50,7 @@ export const msgMeetBuyerMany = (ds, name) => ds.length === 1 ? `Hi ${name}, tha
   `Hi ${name}, thanks for buying ${ds.length} cards (${money(ds.reduce((a, d) => a + Number(d.price || 0), 0))} total):\n` +
   ds.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}\n${d.url}`).join('\n') + `\nWhen and where can we meet?`;
 // seller -> buyer, after Sold
-export const msgInformBuyer = (d) => `Hi ${d.buyer}, thank you! Your purchase of ${d.code} ${d.name} (${money(d.price)}${d.changed ? `, agreed price; listing price ${money(d.listing)}` : ''}) is now marked as sold and complete.\nReceipt no. ${d.no}. I am sending you the PDF receipt in this chat.\nListing: ${d.url}`;
+export const msgInformBuyer = (d) => `Hi ${d.buyer}, thank you! Your purchase of ${d.code} ${d.name} (${money(d.price)}${d.changed ? `, agreed price; listing price ${money(d.listing)}` : ''}) is now marked as sold and complete.\nReceipt no. ${d.no}.\nListing: ${d.url}`;
 
 // ---------- PDF building blocks ----------
 const esc = (s) => String(s ?? '').replace(/[\\()]/g, '\\$&').replace(/[^\x20-\x7e\xa0-\xff]/g, '?');
@@ -197,7 +197,7 @@ export function receiptDataMany(ds) {
   return { no: `${f.no}-x${ds.length}`, items: ds, seller: f.seller, buyer: f.buyer, soldAt: f.soldAt, total, listing, delta, pct: listing ? (delta / listing) * 100 : 0, changed: delta !== 0 };
 }
 export const msgInformBuyerMany = (g) => `Hi ${g.buyer}, thank you! Your purchase of ${g.items.length} cards (${money(g.total)} total) is now marked as sold and complete:\n` +
-  g.items.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}`).join('\n') + `\nReceipt no. ${g.no}. I am sending you the PDF receipt in this chat.`;
+  g.items.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}`).join('\n') + `\nReceipt no. ${g.no}.`;
 
 export function receiptPdfMany(g) {
   const pages = [];
