@@ -22,6 +22,8 @@ export async function viewInventory($app) {
     const s = $app.querySelector('#selall'); if (s) s.textContent = shown.length && shown.every((r) => sel.has(r)) ? 'Clear' : 'Select all';
   };
 
+  let hide = localStorage.getItem('inv_hide') === '1';
+  const money = (x) => (hide ? 'BND ••••' : bnd(x));
   const draw = () => {
     const st = invStats();
     let rows = st.rows.filter((r) => (!f.set || r.c.set === f.set) && (!f.q || (r.c.code + ' ' + r.c.name + ' ' + r.c.jp).toLowerCase().includes(f.q.toLowerCase())));
@@ -32,7 +34,7 @@ export async function viewInventory($app) {
     { const have = new Set(st.rows.map((r) => r.c.ref)); for (const r of [...sel]) if (!have.has(r)) sel.delete(r); }
     const sets = [...new Set(st.rows.map((r) => r.c.set))];
     $app.innerHTML = `<div class="head"><h1>Inventory</h1><div class="row tight"><button class="btn sec" id="share">🔗 Share</button><button class="btn sec" id="vm">${view === 'list' ? '▦ Grid' : '☰ List'}</button><button class="btn" id="add">+ Add card</button><a class="btn sec" href="#/scan">📷 Scan</a></div></div>
-      <div class="hero small"><div class="muted">Value</div><div class="big-num">${bnd(st.value)}</div><div class="muted">${st.count} cards · ${st.unique} unique</div></div>
+      <div class="hero small"><div class="row tight between"><div class="muted">Value</div><button class="btn sec sm-btn" id="vhide">${hide ? '👁 Show value' : '🙈 Hide value'}</button></div><div class="big-num">${money(st.value)}</div><div class="muted">${st.count} cards · ${st.unique} unique</div></div>
       ${st.unique ? '<div class="invact"><button class="btn" id="listall">🏷 List all</button><button class="btn sec" id="listsel" disabled>🏷 Selected (0)</button><button class="btn sec" id="selall">Select all</button><button class="btn sec" id="invf"></button></div>' : ''}
       <div class="panel"><div class="row"><input id="q" placeholder="Search your cards" value="${esc(f.q)}">
         <select id="set"><option value="">All sets</option>${sets.map((s) => `<option value="${s}" ${f.set === s ? 'selected' : ''}>${esc(s.toUpperCase() + ' · ' + setName(s))}</option>`).join('')}</select>
@@ -49,12 +51,12 @@ export async function viewInventory($app) {
       <input type="checkbox" data-act="pick" aria-label="Select ${esc(c.code)}" ${sel.has(c.ref) ? 'checked' : ''} style="width:1.4rem;height:1.4rem;flex:none;margin:0 .45rem 0 0">
       <div class="img" data-act="zoom">${cardImg(c, 'sm')}</div>
       <div class="grow"><div><b>${esc(c.code)}</b> ${esc(c.rarity)} ${artShort(c) ? '<span class="badge">' + esc(artShort(c)) + '</span>' : ''} ${l ? `<button class="badge bn lbtn" data-act="unlist" title="Unlist">${l} listed ✕</button>` : ''}</div>
-        <div class="muted nm">${esc(c.name)}</div><div class="muted">${c.jpy ? bnd(refBnd(c)) + ' ea · ' + bnd(v) : 'No price'}</div></div>
+        <div class="muted nm">${esc(c.name)}</div><div class="muted">${c.jpy ? money(refBnd(c)) + ' ea · ' + money(v) : 'No price'}</div></div>
       <div class="ctl"><div class="stepper"><button data-act="dec">−</button><b>${q}</b><button data-act="inc">+</button></div>
       <button class="btn sec sm-btn" data-act="sell">Sell</button></div></div>`;
   };
   const gridCell = ({ c, q, v }, listed) => `<div class="tile" data-ref="${esc(c.ref)}"><div data-act="zoom">${cardImg(c)}</div><div class="b"><div class="code"><input type="checkbox" data-act="pick" aria-label="Select ${esc(c.code)}" ${sel.has(c.ref) ? 'checked' : ''} style="width:1.1rem;height:1.1rem;margin:0 .3rem 0 0;vertical-align:middle">${esc(c.code)} · ${esc(c.rarity)}</div><div class="nm">${esc(c.name)}</div>
-    <div class="row tight between"><span class="price">${bnd(v)}</span><span class="stepper"><button data-act="dec">−</button><b>${q}</b><button data-act="inc">+</button></span></div>
+    <div class="row tight between"><span class="price">${money(v)}</span><span class="stepper"><button data-act="dec">−</button><b>${q}</b><button data-act="inc">+</button></span></div>
     <button class="btn sec sm-btn" data-act="sell" style="width:100%;margin-top:.3rem">Sell</button></div></div>`;
 
   function bind() {
@@ -64,6 +66,7 @@ export async function viewInventory($app) {
     $('#set').onchange = () => { upd(); draw(); }; $('#sort').onchange = () => { upd(); draw(); };
     const ifb = $('#invf'); if (ifb) { ifb.textContent = cf.label(); ifb.className = 'btn ' + (cf.on() ? '' : 'sec'); }
     if (ifb) ifb.onclick = () => cf.open(() => { const all = invStats().rows; const ok = cf.pass(new Set(all.map((r) => r.c.ref))); return all.filter((r) => !cf.on() || ok.has(r.c.ref)).length; });
+    $('#vhide').onclick = () => { hide = !hide; localStorage.setItem('inv_hide', hide ? '1' : '0'); draw(); };
     const la = $('#listall'); if (la) la.onclick = guard(() => openListAll());
     const ls = $('#listsel'); if (ls) ls.onclick = guard(() => openListAll([...sel]));
     const sa = $('#selall'); if (sa) sa.onclick = () => { if (shown.length && shown.every((r) => sel.has(r))) shown.forEach((r) => sel.delete(r)); else shown.forEach((r) => sel.add(r)); draw(); };
