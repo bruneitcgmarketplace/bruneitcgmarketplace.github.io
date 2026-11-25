@@ -78,7 +78,7 @@ export async function viewMarket($app, setUnsub) {
     draw();
   }
   $app.querySelector('#seller').onclick = sellerSheet;
-  $app.querySelectorAll('#vsw button').forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('view_mkt', view); paint(); }));
+  $app.querySelectorAll('#vsw button').forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('view_mkt', view); paint(true); }));
   function updBar() {
     const bar = $app.querySelector('#mpbar'); bar.hidden = !selMode;
     $app.querySelector('#msel').className = 'btn ' + (selMode ? '' : 'sec'); $app.querySelector('#msel').textContent = selMode ? '☑ Done' : '☑ Select';
@@ -97,7 +97,10 @@ export async function viewMarket($app, setUnsub) {
     });
     updBar();
   }
-  function paint() {
+  const pagerHtml = (pg, pages, from, n, total) => `<div class="pager" style="grid-column:1/-1"><button class="btn sec" data-pg="${pg - 1}" ${pg === 0 ? 'disabled' : ''}>◀ Previous</button><span class="pginfo"><b>Page ${pg + 1} of ${pages}</b><small>${from + 1}–${from + n} of ${total}</small></span><button class="btn" data-pg="${pg + 1}" ${pg >= pages - 1 ? 'disabled' : ''}>Next ▶</button></div>`;
+  let page = 0; const PAGE = 50;   // listings per page
+  function paint(keep) {
+    if (!keep) page = 0;
     const el = $app.querySelector('#list'); if (!el) return;
     const sort = $app.querySelector('#sort').value;
     let rows = base();
@@ -108,12 +111,14 @@ export async function viewMarket($app, setUnsub) {
     if (type === 'buy_now') rows = groupBuyNow(rows);   // identical offers -> one tile with a quantity
     rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
     curRows = rows;
-    const more = rows.length > 200; rows = rows.slice(0, 200);
+    const pages = Math.max(1, Math.ceil(rows.length / PAGE)); page = Math.min(page, pages - 1);
+    const from = page * PAGE, total = rows.length; rows = rows.slice(from, from + PAGE);
     applyView();
     const draw1 = view === 'list' ? listRow : tile;
-    el.innerHTML = rows.length ? rows.map(draw1).join('') + (more ? '<p class="muted" style="grid-column:1/-1">Showing the first 200. Narrow the filters to see the rest.</p>' : '')
+    el.innerHTML = rows.length ? rows.map(draw1).join('') + (pages > 1 ? pagerHtml(page, pages, from, rows.length, total) : '')
       : `<p class="muted">${activeCount(mf) || sel.size ? 'Nothing matches these filters.' : type === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} ${activeCount(mf) || sel.size ? '<a href="#" id="fclr">Clear filters</a>' : '<a href="#/sell">Sell a card</a>'}</p>`;
     decorate();
+    el.querySelectorAll('[data-pg]').forEach((b) => (b.onclick = () => { page = Number(b.dataset.pg); paint(true); const top = $app.querySelector('#mt'); if (top) top.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
     const c = el.querySelector('#fclr'); if (c) c.onclick = (ev) => { ev.preventDefault(); Object.assign(mf, FRESH(), { q: '' }); sel = new Set(); saveSel(); sessionStorage.setItem('mf', JSON.stringify(mf)); sellerLabel(); btnLabel(); paint(); };
   }
   fbtn.onclick = () => filterSheet({ f: mf, cat, ensureData, market: true, unit: 'listing',
@@ -136,8 +141,8 @@ export async function viewMarket($app, setUnsub) {
   };
   $app.querySelector('#mshare').onclick = openShare;
   $app.querySelector('#mpgo').onclick = openShare;
-  $app.querySelector('#msel').onclick = () => { selMode = !selMode; paint(); };
-  $app.querySelector('#mpall').onclick = (e) => { e.preventDefault(); const all = curRows.length && curRows.every((l) => pick.has(l.id)); curRows.forEach((l) => (all ? pick.delete(l.id) : pick.add(l.id))); paint(); };
+  $app.querySelector('#msel').onclick = () => { selMode = !selMode; paint(true); };
+  $app.querySelector('#mpall').onclick = (e) => { e.preventDefault(); const all = curRows.length && curRows.every((l) => pick.has(l.id)); curRows.forEach((l) => (all ? pick.delete(l.id) : pick.add(l.id))); paint(true); };
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;
