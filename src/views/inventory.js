@@ -74,9 +74,9 @@ export async function viewInventory($app) {
         const url = await link();
         const rows = invStats().rows.filter((r) => kind === 'all' || sel.has(r.c.ref)).sort((a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref));
         const pics = rows.map((r) => ({ url: catImg(r.c, '200_280'), qty: r.q > 1 ? `×${r.q}` : '' })), sub = `${rows.length} unique · ${rows.reduce((s, r) => s + r.q, 0)} cards`;
-        if (kind === 'all') return { text: `Check out ${who} One Piece card collection on Brunei One Piece TCG: ${url}`, pics, sub, link: url, ttl: `${who} collection` };
+        if (kind === 'all') return { text: `Check out ${who} One Piece card collection on Brunei One Piece TCG: ${url}`, pics, sub, link: url, ttl: `${state.me?.display_name || 'My'} Inventory` };
         const lines = rows.slice(0, 40).map((r) => `• ${r.c.code} ${r.c.rarity} ${r.c.name} ×${r.q}`);
-        return { link: url, ttl: `${who} collection`, text: `${who} One Piece cards (${rows.length} selected):\n${lines.join('\n')}${rows.length > 40 ? `\n…and ${rows.length - 40} more` : ''}\n\nFull collection: ${url}`, pics, sub };
+        return { link: url, ttl: `${state.me?.display_name || 'My'} Inventory`, text: `${who} One Piece cards (${rows.length} selected):\n${lines.join('\n')}${rows.length > 40 ? `\n…and ${rows.length - 40} more` : ''}\n\nFull collection: ${url}`, pics, sub };
       } });
       s.el.querySelector('#sc-manage').onclick = () => { s.close(); guard(() => openShareSheet(who))(); };
     };

@@ -152,7 +152,7 @@ export async function viewOrders($app, opts = {}) {
           const gs = boxes().filter((b) => kind === 'all' || b.checked).map(grp);
           const lines = gs.slice(0, 15).map(({ ids, l }) => `• ${l.card_code} ${l.rarity || ''} ${l.card_name || ''} ×${ids.length} · BND ${Number(l.price).toFixed(2)}\n  ${base}listing/${ids[0]}`);
           const cat = state.cat; const pics = gs.map(({ ids, l }) => { const c = cat?.byRef.get(l.card_ref); return { url: c ? catImg(c, '200_280') : (l.catalog_image || ''), qty: ids.length > 1 ? `×${ids.length}` : '', price: 'BND ' + Number(l.price).toFixed(2) }; }).filter((p) => p.url);
-          return { text: `My One Piece cards for sale on Brunei One Piece TCG (${gs.length} card${gs.length === 1 ? '' : 's'}):\n${lines.join('\n')}${gs.length > 15 ? `\n…and ${gs.length - 15} more` : ''}\n\nAll my listings: ${base}user/${uid}`, pics, sub: `${gs.length} card${gs.length === 1 ? '' : 's'} for sale`, link: `${base}user/${uid}`, ttl: `${state.me?.display_name || 'My'} listings` };
+          return { text: `My One Piece cards for sale on Brunei One Piece TCG (${gs.length} card${gs.length === 1 ? '' : 's'}):\n${lines.join('\n')}${gs.length > 15 ? `\n…and ${gs.length - 15} more` : ''}\n\nAll my listings: ${base}user/${uid}`, pics, sub: `${gs.length} card${gs.length === 1 ? '' : 's'} for sale`, link: `${base}user/${uid}`, ttl: `${state.me?.display_name || 'My'} Listings` };
         } });
       };
       $app.querySelector('#unpick').onclick = () => { const all = boxes().every((b) => b.checked); boxes().forEach((b) => (b.checked = !all)); upd(); };

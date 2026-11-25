@@ -120,7 +120,7 @@ export async function snapshotImage(title, sub, pics, link = '') {
   const LIM_AREA = 26e6, LIM_SIDE = 16000;
   let cell = 240, W, H, gap, pad, head, foot;
   for (; cell >= 70; cell -= 6) {
-    gap = Math.round(cell * 0.07); pad = Math.round(cell * 0.2); head = Math.round(Math.max(210, cell * 1.0)); foot = Math.round(Math.max(110, cell * 0.5));
+    gap = Math.round(cell * 0.07); pad = Math.round(cell * 0.2); head = Math.round(Math.max(190, cell * 0.9)); foot = Math.round(Math.max(70, cell * 0.35));
     W = pad * 2 + cols * cell + (cols - 1) * gap; H = head + Math.round(cell * 0.2) + Math.ceil(m / cols) * (Math.round(cell * 1.4) + gap) + foot;
     if (W * H <= LIM_AREA && H <= LIM_SIDE) break;
   }
@@ -131,26 +131,24 @@ export async function snapshotImage(title, sub, pics, link = '') {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
   const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
-  // white poster: One Piece colours (red / straw-hat yellow / ocean blue / navy), heavy condensed type
+  // clean white sheet: navy title with a One Piece red accent, thin colour rule, no branding text
   const NAVY = '#14213d', RED = '#c1121f', GOLD = '#f2b705', BLUE = '#1d5fa8', GREEN = '#2e8b57', ORANGE = '#e8731a';
   const FONT = `"Anton", Impact, "Haettenschweiler", "Arial Narrow Bold", "Roboto Condensed", sans-serif`;
   const BODY = `"Roboto Condensed", "Arial Narrow", "Segoe UI", Roboto, sans-serif`;
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
-  const u = W / 1200, band = Math.max(10, Math.round(14 * u));
+  const u = W / 1200, band = Math.max(8, Math.round(10 * u));
   const stripe = (y) => { const cs = [RED, GOLD, GREEN, ORANGE, BLUE], w = W / cs.length; cs.forEach((c, i) => { g.fillStyle = c; g.fillRect(Math.round(i * w), y, Math.ceil(w), band); }); };
   stripe(0);
-  // frame
-  g.strokeStyle = NAVY; g.lineWidth = Math.max(4, Math.round(6 * u)); g.strokeRect(g.lineWidth / 2 + 2, band + 2, W - g.lineWidth - 4, H - band * 2 - 4);
-  g.fillStyle = RED; g.font = `400 ${Math.round(24 * u)}px ${FONT}`; g.fillText('★  BRUNEI ONE PIECE TCG  ★', x0, Math.round(head * 0.30), W - 2 * x0);
-  g.fillStyle = NAVY; g.font = `400 ${Math.round(70 * u)}px ${FONT}`; g.fillText(title.toUpperCase(), x0, Math.round(head * 0.68), W - 2 * x0 - Math.round(250 * u));
-  g.fillStyle = '#4b5563'; g.font = `700 ${Math.round(26 * u)}px ${BODY}`; g.fillText(sub, x0, Math.round(head * 0.9), W - 2 * x0 - Math.round(250 * u));
-  g.fillStyle = GOLD; g.fillRect(x0, Math.round(head * 0.95), W - 2 * x0, Math.max(5, Math.round(7 * u)));
-  // count badge
-  const bw = Math.round(210 * u), bh = Math.round(112 * u), bx = W - x0 - bw, by = Math.round(head * 0.22);
-  g.fillStyle = RED; rr(bx, by, bw, bh, Math.round(14 * u)); g.fill();
-  g.strokeStyle = NAVY; g.lineWidth = Math.max(3, Math.round(4 * u)); rr(bx, by, bw, bh, Math.round(14 * u)); g.stroke();
-  g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = `400 ${Math.round(62 * u)}px ${FONT}`; g.fillText(String(n), bx + bw / 2, by + Math.round(70 * u));
-  g.fillStyle = GOLD; g.font = `400 ${Math.round(22 * u)}px ${FONT}`; g.fillText(n === 1 ? 'CARD' : 'CARDS', bx + bw / 2, by + Math.round(100 * u)); g.textAlign = 'left';
+  const tw = Math.round(14 * u), ty = Math.round(head * 0.24), th = Math.round(head * 0.50);
+  g.fillStyle = RED; g.fillRect(x0, ty, tw, th);
+  g.fillStyle = NAVY; g.textBaseline = 'alphabetic'; g.font = `400 ${Math.round(64 * u)}px ${FONT}`;
+  g.fillText(title.toUpperCase(), x0 + tw + Math.round(18 * u), ty + Math.round(th * 0.50), W - 2 * x0 - Math.round(260 * u));
+  g.fillStyle = '#6b7280'; g.font = `700 ${Math.round(26 * u)}px ${BODY}`;
+  g.fillText(sub.toUpperCase(), x0 + tw + Math.round(18 * u), ty + th - Math.round(2 * u), W - 2 * x0 - Math.round(260 * u));
+  // card count, right aligned
+  g.textAlign = 'right'; g.fillStyle = RED; g.font = `400 ${Math.round(72 * u)}px ${FONT}`; g.fillText(String(n), W - x0, ty + Math.round(th * 0.62));
+  g.fillStyle = '#6b7280'; g.font = `700 ${Math.round(22 * u)}px ${BODY}`; g.fillText(n === 1 ? 'CARD' : 'CARDS', W - x0, ty + th - Math.round(2 * u)); g.textAlign = 'left';
+  g.fillStyle = NAVY; g.fillRect(x0, Math.round(head * 0.88), W - 2 * x0, Math.max(3, Math.round(4 * u)));
   // cards
   const load = (url) => new Promise((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
   const drawTag = (txt, x, y, fs, fill, ink, align) => {
@@ -170,11 +168,9 @@ export async function snapshotImage(title, sub, pics, link = '') {
     if (p.price) drawTag(p.price, x + cell / 2, y + ch - fs * 1.75, fs, '#14213d', '#f2b705', 'center');
   } };
   await Promise.all(Array.from({ length: 8 }, worker));
-  // footer
+  // footer: colour rule only
   stripe(H - band);
-  g.fillStyle = NAVY; g.font = `400 ${Math.round(26 * u)}px ${FONT}`;
-  if (n > MAXC) { g.fillStyle = RED; g.fillText(`+${n - MAXC} MORE CARDS NOT SHOWN`, x0, H - band - Math.round(foot * 0.62), W - 2 * x0); g.fillStyle = NAVY; }
-  g.fillText((link ? link.replace(/^https?:\/\//, '') : 'optcgmarketplace.github.io').toUpperCase(), x0, H - band - Math.round(foot * 0.3), W - 2 * x0);
+  if (n > MAXC) { g.fillStyle = RED; g.font = `400 ${Math.round(24 * u)}px ${FONT}`; g.fillText(`+${n - MAXC} MORE CARDS NOT SHOWN`, x0, H - band - Math.round(foot * 0.4), W - 2 * x0); }
   return await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
 }
 
