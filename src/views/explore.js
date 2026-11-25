@@ -1,6 +1,6 @@
 import { sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard, primeMeta, groupBuyNow, listRow } from '../lib.js';
 import { fallbackNote } from '../fallback.js';
-import { shareComposer } from './shared.js';
+import { shareChoice } from './shared.js';
 import { filterSheet, FRESH, activeCount, matchSync, needsInfo, loadInfo } from './exploreSets.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
@@ -20,14 +20,16 @@ export async function viewMarket($app, setUnsub) {
   const applyView = () => { const el = $app.querySelector('#list'); if (el) el.className = view === 'list' ? 'lrows' : view === 'tiles' ? 'grid tiles' : 'grid'; $app.querySelectorAll('#vsw button').forEach((b) => b.classList.toggle('on', b.dataset.v === view)); };
   let sel = new Set(JSON.parse(sessionStorage.getItem('msel2') || '[]'));   // chosen seller ids (empty = all)
   let sellers = new Map();   // id -> { name, n } for this tab
-  let curRows = [];   // what the page currently shows (after filters, grouping, sort)
-  $app.innerHTML = `<div class="head" style="margin-bottom:.4rem"><h1 style="margin:0">Marketplace</h1><button class="btn sec" id="mshare">🔗 Share</button></div>
+  let curRows = [];
+  let selMode = false; const pick = new Set();   // chosen listing ids (the first id of a combined group)   // what the page currently shows (after filters, grouping, sort)
+  $app.innerHTML = `<div class="head" style="margin-bottom:.4rem"><h1 style="margin:0">Marketplace</h1><div class="row tight"><button class="btn sec" id="msel">☑ Select</button><button class="btn sec" id="mshare">🔗 Share</button></div></div>
     <div class="seg" id="mt"><a data-t="buy_now">Buy now</a><a data-t="auction">Auction</a></div>
     <div class="mbar">
       <input id="q" type="search" placeholder="Search code or name" value="${esc(f.q || '')}">
       <button class="btn sec" id="fbtn">⚙ Filters</button>
       <div class="two"><select id="sort" aria-label="Sort by"></select><button class="btn sec" id="seller" type="button" aria-label="Sellers">All sellers</button><div class="vsw" id="vsw" role="group" aria-label="View"><button data-v="list" title="List" aria-label="List view">☰</button><button data-v="grid" title="Grid" aria-label="Grid view">▦</button><button data-v="tiles" title="Tiles" aria-label="Tiles view">▪▪▪</button></div></div></div>
-    <div id="list" class="grid"><p class="muted">Loading…</p></div>`;
+    <div id="list" class="grid"><p class="muted">Loading…</p></div>
+    <div class="pickbar" id="mpbar" hidden><button class="btn sec" id="mpall">Select all</button><button class="btn" id="mpgo" disabled>Share selected (0)</button></div>`;
   const setTab = (pref) => {
     $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));
     const s = $app.querySelector('#sort');
@@ -76,6 +78,22 @@ export async function viewMarket($app, setUnsub) {
   }
   $app.querySelector('#seller').onclick = sellerSheet;
   $app.querySelectorAll('#vsw button').forEach((b) => (b.onclick = () => { view = b.dataset.v; localStorage.setItem('view_mkt', view); paint(); }));
+  function updBar() {
+    const bar = $app.querySelector('#mpbar'); bar.hidden = !selMode;
+    $app.querySelector('#msel').className = 'btn ' + (selMode ? '' : 'sec'); $app.querySelector('#msel').textContent = selMode ? '☑ Done' : '☑ Select';
+    const n = curRows.filter((l) => pick.has(l.id)).length, go = $app.querySelector('#mpgo');
+    go.textContent = `Share selected (${n})`; go.disabled = !n; go.className = 'btn' + (n ? '' : ' sec');
+    $app.querySelector('#mpall').textContent = curRows.length && n === curRows.length ? 'Clear' : `Select all (${curRows.length})`;
+  }
+  function decorate() {
+    const el = $app.querySelector('#list'); el.classList.toggle('selmode', selMode);
+    if (selMode) el.querySelectorAll('a.tile, a.lrow').forEach((a) => {
+      const id = a.getAttribute('href').split('/').pop(), on = pick.has(id);
+      a.classList.toggle('picked', on); a.insertAdjacentHTML('afterbegin', `<span class="mk">${on ? '✓' : ''}</span>`);
+      a.onclick = (e) => { e.preventDefault(); e.stopPropagation(); if (pick.has(id)) pick.delete(id); else pick.add(id); a.classList.toggle('picked', pick.has(id)); a.querySelector('.mk').textContent = pick.has(id) ? '✓' : ''; updBar(); };
+    });
+    updBar();
+  }
   function paint() {
     const el = $app.querySelector('#list'); if (!el) return;
     const sort = $app.querySelector('#sort').value;
@@ -92,14 +110,14 @@ export async function viewMarket($app, setUnsub) {
     const draw1 = view === 'list' ? listRow : tile;
     el.innerHTML = rows.length ? rows.map(draw1).join('') + (more ? '<p class="muted" style="grid-column:1/-1">Showing the first 200. Narrow the filters to see the rest.</p>' : '')
       : `<p class="muted">${activeCount(mf) || sel.size ? 'Nothing matches these filters.' : type === 'auction' ? 'No live auctions match.' : 'No buy-now listings match.'} ${activeCount(mf) || sel.size ? '<a href="#" id="fclr">Clear filters</a>' : '<a href="#/sell">Sell a card</a>'}</p>`;
+    decorate();
     const c = el.querySelector('#fclr'); if (c) c.onclick = (ev) => { ev.preventDefault(); Object.assign(mf, FRESH(), { q: '' }); sel = new Set(); saveSel(); sessionStorage.setItem('mf', JSON.stringify(mf)); sellerLabel(); btnLabel(); paint(); };
   }
   fbtn.onclick = () => filterSheet({ f: mf, cat, ensureData, market: true, unit: 'listing',
     count: () => { const b = base(); const f = activeCount(mf) ? b.filter((l) => matchRefs(b).has(l.card_ref)) : b; return type === 'buy_now' ? groupBuyNow(f).length : f.length; },
     done: () => { sessionStorage.setItem('mf', JSON.stringify(mf)); btnLabel(); paint(); } });
-  $app.querySelector('#mshare').onclick = guard(async () => {
-    if (!curRows.length) { toast('Nothing to share'); return; }
-    const base = `${location.origin}${location.pathname}#/`, rows = curRows;
+  const buildShare = (rows) => {
+    const base = `${location.origin}${location.pathname}#/`;
     const n = (l) => (l._ids ? l._ids.length : 1);
     const where = type === 'auction' ? 'Auctions' : 'Buy now';
     const one = sel.size === 1 ? [...sel][0] : null, sname = one ? sellers.get(one)?.name : '';
@@ -107,8 +125,16 @@ export async function viewMarket($app, setUnsub) {
     const link = one ? `${base}user/${one}` : `${base}market?type=${type}`;
     const text = `${where} on Brunei One Piece TCG${sname ? ' from ' + sname : ''} (${rows.length} listing${rows.length === 1 ? '' : 's'}${activeCount(mf) ? ', filtered' : ''}):\n${lines.join('\n')}${rows.length > 15 ? `\n…and ${rows.length - 15} more` : ''}\n\n${one ? 'All from this seller' : 'Marketplace'}: ${link}`;
     const pics = rows.map((l) => { const c = cat.byRef.get(l.card_ref); return { url: c ? catImg(c, '200_280') : (l.catalog_image || ''), qty: n(l) > 1 ? `×${n(l)}` : '', price: 'BND ' + listingPrice(l).toFixed(2) }; }).filter((x) => x.url);
-    shareComposer('Share marketplace', text, pics, `${where}${sname ? ' · ' + sname : ''}${activeCount(mf) ? ' · filtered' : ''}`, link, sname ? `${sname}’s listings` : `Marketplace · ${where}`);
-  });
+    return { text, pics, sub: `${where}${sname ? ' · ' + sname : ''}${activeCount(mf) ? ' · filtered' : ''}`, link, ttl: sname ? `${sname}’s listings` : `Marketplace · ${where}` };
+  };
+  const openShare = () => {
+    if (!curRows.length) { toast('Nothing to share'); return; }
+    shareChoice({ title: 'Share marketplace', selCount: curRows.filter((l) => pick.has(l.id)).length, build: async (kind) => buildShare(kind === 'selected' ? curRows.filter((l) => pick.has(l.id)) : curRows) });
+  };
+  $app.querySelector('#mshare').onclick = openShare;
+  $app.querySelector('#mpgo').onclick = openShare;
+  $app.querySelector('#msel').onclick = () => { selMode = !selMode; paint(); };
+  $app.querySelector('#mpall').onclick = () => { const all = curRows.length && curRows.every((l) => pick.has(l.id)); curRows.forEach((l) => (all ? pick.delete(l.id) : pick.add(l.id))); paint(); };
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;
