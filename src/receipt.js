@@ -45,6 +45,10 @@ export const msgInformSeller = (d) => `Hi ${d.seller}, I ${d.type === 'auction' 
 export const msgInformSellerMany = (ds) => ds.length === 1 ? msgInformSeller(ds[0]) :
   `Hi ${ds[0].seller}, I clicked Buy now on One Piece TCG for ${ds.length} cards (${money(ds.reduce((a, d) => a + Number(d.price || 0), 0))} total). Please keep them on hold for me:\n` +
   ds.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}${d.type === 'auction' ? ' (won auction)' : ''}\n${d.url}`).join('\n') + `\nWhen and where can we meet?`;
+// seller -> buyer, several held cards in one message
+export const msgMeetBuyerMany = (ds, name) => ds.length === 1 ? `Hi ${name}, thanks for buying ${ds[0].code} ${ds[0].name} (${ds[0].cond}). When and where can we meet?\nListing: ${ds[0].url}` :
+  `Hi ${name}, thanks for buying ${ds.length} cards (${money(ds.reduce((a, d) => a + Number(d.price || 0), 0))} total):\n` +
+  ds.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}\n${d.url}`).join('\n') + `\nWhen and where can we meet?`;
 // seller -> buyer, after Sold
 export const msgInformBuyer = (d) => `Hi ${d.buyer}, thank you! Your purchase of ${d.code} ${d.name} (${money(d.price)}${d.changed ? `, agreed price; listing price ${money(d.listing)}` : ''}) is now marked as sold and complete.\nReceipt no. ${d.no}. I am sending you the PDF receipt in this chat.\nListing: ${d.url}`;
 
