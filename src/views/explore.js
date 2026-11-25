@@ -1,5 +1,6 @@
 import { sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard, primeMeta, groupBuyNow, listRow } from '../lib.js';
 import { fallbackNote } from '../fallback.js';
+import { shareComposer } from './shared.js';
 import { filterSheet, FRESH, activeCount, matchSync, needsInfo, loadInfo } from './exploreSets.js';
 
 const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
@@ -19,7 +20,8 @@ export async function viewMarket($app, setUnsub) {
   const applyView = () => { const el = $app.querySelector('#list'); if (el) el.className = view === 'list' ? 'lrows' : view === 'tiles' ? 'grid tiles' : 'grid'; $app.querySelectorAll('#vsw button').forEach((b) => b.classList.toggle('on', b.dataset.v === view)); };
   let sel = new Set(JSON.parse(sessionStorage.getItem('msel2') || '[]'));   // chosen seller ids (empty = all)
   let sellers = new Map();   // id -> { name, n } for this tab
-  $app.innerHTML = `<h1 style="margin-bottom:.4rem">Marketplace</h1>
+  let curRows = [];   // what the page currently shows (after filters, grouping, sort)
+  $app.innerHTML = `<div class="head" style="margin-bottom:.4rem"><h1 style="margin:0">Marketplace</h1><button class="btn sec" id="mshare">🔗 Share</button></div>
     <div class="seg" id="mt"><a data-t="buy_now">Buy now</a><a data-t="auction">Auction</a></div>
     <div class="mbar">
       <input id="q" type="search" placeholder="Search code or name" value="${esc(f.q || '')}">
@@ -84,6 +86,7 @@ export async function viewMarket($app, setUnsub) {
     else if (sort === 'rating') { const sc = (l) => { const m = state.umeta.get(l.seller_id); return m && m.n ? m.avg + Math.min(m.n, 20) / 100 : -1; }; rows.sort((a, b) => sc(b) - sc(a)); }   // best average first, more reviews break ties
     if (type === 'buy_now') rows = groupBuyNow(rows);   // identical offers -> one tile with a quantity
     rows.sort((a, b) => (a.status === 'reserved') - (b.status === 'reserved'));   // held cards last (stable)
+    curRows = rows;
     const more = rows.length > 200; rows = rows.slice(0, 200);
     applyView();
     const draw1 = view === 'list' ? listRow : tile;
@@ -94,6 +97,18 @@ export async function viewMarket($app, setUnsub) {
   fbtn.onclick = () => filterSheet({ f: mf, cat, ensureData, market: true, unit: 'listing',
     count: () => { const b = base(); const f = activeCount(mf) ? b.filter((l) => matchRefs(b).has(l.card_ref)) : b; return type === 'buy_now' ? groupBuyNow(f).length : f.length; },
     done: () => { sessionStorage.setItem('mf', JSON.stringify(mf)); btnLabel(); paint(); } });
+  $app.querySelector('#mshare').onclick = guard(async () => {
+    if (!curRows.length) { toast('Nothing to share'); return; }
+    const base = `${location.origin}${location.pathname}#/`, rows = curRows;
+    const n = (l) => (l._ids ? l._ids.length : 1);
+    const where = type === 'auction' ? 'Auctions' : 'Buy now';
+    const one = sel.size === 1 ? [...sel][0] : null, sname = one ? sellers.get(one)?.name : '';
+    const lines = rows.slice(0, 15).map((l) => `• ${l.card_code} ${l.rarity || ''} ${l.card_name || ''}${n(l) > 1 ? ' ×' + n(l) : ''} · ${bnd(listingPrice(l))}${l.seller?.display_name && !one ? ' · ' + l.seller.display_name : ''}\n  ${base}listing/${l.id}`);
+    const link = one ? `${base}user/${one}` : `${base}market?type=${type}`;
+    const text = `${where} on Brunei One Piece TCG${sname ? ' from ' + sname : ''} (${rows.length} listing${rows.length === 1 ? '' : 's'}${activeCount(mf) ? ', filtered' : ''}):\n${lines.join('\n')}${rows.length > 15 ? `\n…and ${rows.length - 15} more` : ''}\n\n${one ? 'All from this seller' : 'Marketplace'}: ${link}`;
+    const pics = rows.map((l) => { const c = cat.byRef.get(l.card_ref); return { url: c ? catImg(c, '200_280') : (l.catalog_image || ''), qty: n(l) > 1 ? `×${n(l)}` : '', price: 'BND ' + listingPrice(l).toFixed(2) }; }).filter((x) => x.url);
+    shareComposer('Share marketplace', text, pics, `${where}${sname ? ' · ' + sname : ''}${activeCount(mf) ? ' · filtered' : ''}`, link, sname ? `${sname}’s listings` : `Marketplace · ${where}`);
+  });
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;

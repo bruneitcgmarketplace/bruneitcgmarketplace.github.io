@@ -101,35 +101,93 @@ export async function viewShared($app, token) {
 }
 
 
-// One-page picture of many cards: { url, tag } each. Returns a JPEG blob (all cards on a single image).
-export async function snapshotImage(title, sub, pics) {
-  const n = pics.length, MAXC = 800; pics = pics.slice(0, MAXC);
-  const size = n > 120 ? '100_140' : '200_280';
-  const cols = Math.min(24, Math.max(3, Math.ceil(Math.sqrt(pics.length * 0.9))));
-  const W = Math.min(2400, Math.max(1080, cols * 150)), pad = 14, gap = 8, head = 110;
-  const cw = Math.floor((W - pad * 2 - gap * (cols - 1)) / cols), ch = Math.round(cw * 1.4), rows = Math.ceil(pics.length / cols);
-  const H = head + pad + rows * (ch + gap);
+// One-page picture of many cards: pics = [{ url, qty, price }]. Returns a high-resolution JPEG blob (every card on a single image).
+export async function snapshotImage(title, sub, pics, link = '') {
+  const n = pics.length, MAXC = 1000; pics = pics.slice(0, MAXC);
+  const m = pics.length;
+  const cols = Math.min(16, Math.max(3, Math.ceil(Math.sqrt(m * 1.1))));
+  const LIM_AREA = 26e6, LIM_SIDE = 16000;
+  let cell = 240, W, H, gap, pad, head, foot;
+  for (; cell >= 70; cell -= 6) {
+    gap = Math.round(cell * 0.07); pad = Math.round(cell * 0.2); head = Math.round(Math.max(210, cell * 1.0)); foot = Math.round(Math.max(110, cell * 0.5));
+    W = pad * 2 + cols * cell + (cols - 1) * gap; H = head + Math.round(cell * 0.2) + Math.ceil(m / cols) * (Math.round(cell * 1.4) + gap) + foot;
+    if (W * H <= LIM_AREA && H <= LIM_SIDE) break;
+  }
+  W = Math.max(W, 1100);
+  const ch = Math.round(cell * 1.4), x0 = Math.round((W - (cols * cell + (cols - 1) * gap)) / 2), rows = Math.ceil(m / cols);
+  const size = cell <= 110 ? '100_140' : cell <= 210 ? '200_280' : '250_350';
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
-  const g = cv.getContext('2d');
-  g.fillStyle = '#14213d'; g.fillRect(0, 0, W, H);
-  g.fillStyle = '#ffc83d'; g.fillRect(0, 0, W, 8);
-  g.fillStyle = '#fff'; g.font = `bold ${Math.round(W / 28)}px sans-serif`; g.fillText(title, pad + 6, 62, W - 2 * pad);
-  g.fillStyle = '#c9d1e0'; g.font = `${Math.round(W / 50)}px sans-serif`; g.fillText(sub, pad + 6, 98, W - 2 * pad);
-  const load = (u) => new Promise((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = u; });
+  const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
+  const rr = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  // background
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1b2b52'); bg.addColorStop(1, '#0d1630'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  // header band
+  const hg = g.createLinearGradient(0, 0, W, head); hg.addColorStop(0, '#c1121f'); hg.addColorStop(0.55, '#8c0d17'); hg.addColorStop(1, '#14213d'); g.fillStyle = hg; g.fillRect(0, 0, W, head);
+  g.fillStyle = '#ffc83d'; g.fillRect(0, head, W, Math.max(6, Math.round(W / 300)));
+  const u = W / 1200;
+  g.fillStyle = '#ffd966'; g.font = `700 ${Math.round(22 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText('BRUNEI ONE PIECE TCG', x0, Math.round(head * 0.26), W - 2 * x0);
+  g.fillStyle = '#fff'; g.font = `800 ${Math.round(52 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(title, x0, Math.round(head * 0.62), W - 2 * x0 - Math.round(260 * u));
+  g.fillStyle = '#ffe9b0'; g.font = `500 ${Math.round(26 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(sub, x0, Math.round(head * 0.86), W - 2 * x0 - Math.round(260 * u));
+  // count badge
+  const bw = Math.round(220 * u), bh = Math.round(100 * u), bx = W - x0 - bw, by = Math.round((head - bh) / 2);
+  g.fillStyle = '#ffc83d'; rr(bx, by, bw, bh, Math.round(18 * u)); g.fill();
+  g.fillStyle = '#14213d'; g.textAlign = 'center'; g.font = `800 ${Math.round(46 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(String(n), bx + bw / 2, by + Math.round(56 * u));
+  g.font = `600 ${Math.round(20 * u)}px "Segoe UI", Roboto, sans-serif`; g.fillText(n === 1 ? 'CARD' : 'CARDS', bx + bw / 2, by + Math.round(86 * u)); g.textAlign = 'left';
+  // cards
+  const load = (url) => new Promise((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+  const drawTag = (txt, x, y, fs, fill, ink, align) => {
+    g.font = `800 ${fs}px "Segoe UI", Roboto, sans-serif`; const w = g.measureText(txt).width + fs * 0.9, h = fs * 1.5, px = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
+    g.save(); g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = fs * 0.4; g.shadowOffsetY = fs * 0.12; g.fillStyle = fill; rr(px, y, w, h, h / 2); g.fill(); g.restore();
+    g.fillStyle = ink; g.fillText(txt, px + fs * 0.45, y + fs * 1.1);
+  };
   let next = 0;
-  const worker = async () => { while (next < pics.length) {
-    const k = next++, p = pics[k], x = pad + (k % cols) * (cw + gap), y = head + pad + Math.floor(k / cols) * (ch + gap);
+  const worker = async () => { while (next < m) {
+    const k = next++, p = pics[k], x = x0 + (k % cols) * (cell + gap), y = head + Math.round(cell * 0.2) + Math.floor(k / cols) * (ch + gap);
     const im = await load(p.url.replace(/\/(?:\d+_\d+|front)\//, `/${size}/`));
-    if (im) g.drawImage(im, x, y, cw, ch); else { g.fillStyle = '#2b3a5c'; g.fillRect(x, y, cw, ch); }
-    if (p.tag) { const fs = Math.max(11, Math.round(cw / 5)); g.font = `bold ${fs}px sans-serif`; const w = g.measureText(p.tag).width + fs * 0.7; g.fillStyle = '#c1121f'; g.fillRect(x + cw - w, y + ch - fs * 1.3, w, fs * 1.3); g.fillStyle = '#fff'; g.fillText(p.tag, x + cw - w + fs * 0.35, y + ch - fs * 0.3); }
+    g.save(); g.shadowColor = 'rgba(0,0,0,.55)'; g.shadowBlur = cell * 0.08; g.shadowOffsetY = cell * 0.025; g.fillStyle = '#2b3a5c'; rr(x, y, cell, ch, cell * 0.05); g.fill(); g.restore();
+    g.save(); rr(x, y, cell, ch, cell * 0.05); g.clip(); if (im) g.drawImage(im, x, y, cell, ch); g.restore();
+    const fs = Math.max(11, Math.round(cell * 0.14));
+    if (p.qty) drawTag(p.qty, x + cell - fs * 0.25, y + fs * 0.25, fs, '#c1121f', '#fff', 'right');
+    if (p.price) drawTag(p.price, x + cell / 2, y + ch - fs * 1.75, fs, '#ffc83d', '#14213d', 'center');
   } };
-  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
-  if (n > MAXC) { g.fillStyle = '#ffc83d'; g.font = `${Math.round(W / 50)}px sans-serif`; g.fillText(`+${n - MAXC} more cards`, W - 260, 98); }
-  return await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.85));
+  await Promise.all(Array.from({ length: 8 }, worker));
+  // footer
+  g.fillStyle = '#ffc83d'; g.fillRect(0, H - foot, W, Math.max(3, Math.round(W / 600)));
+  g.fillStyle = '#fff'; g.font = `600 ${Math.round(24 * u)}px "Segoe UI", Roboto, sans-serif`;
+  if (n > MAXC) g.fillText(`+${n - MAXC} more cards not shown`, x0, H - Math.round(foot * 0.62), W - 2 * x0);
+  g.fillStyle = '#ffd966'; g.fillText(link ? link.replace(/^https?:\/\//, '') : 'optcgmarketplace.github.io', x0, H - Math.round(foot * 0.28), W - 2 * x0);
+  return await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.92));
+}
+
+// Full-screen viewer: pinch / +/- / double-tap to zoom, drag to move.
+export function zoomViewer(url) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column';
+  wrap.innerHTML = `<div style="display:flex;gap:.5rem;padding:.5rem;background:#111;align-items:center"><button class="btn sec sm-btn" id="zv-m">−</button><button class="btn sec sm-btn" id="zv-p">+</button><button class="btn sec sm-btn" id="zv-f">Fit</button><span style="flex:1"></span><button class="btn sm-btn" id="zv-x">✕ Close</button></div>
+    <div id="zv-s" style="flex:1;overflow:auto;touch-action:pan-x pan-y;-webkit-overflow-scrolling:touch"><img id="zv-i" src="${url}" alt="" style="display:block;width:100%;max-width:none;height:auto"></div>`;
+  document.body.appendChild(wrap);
+  const sc = wrap.querySelector('#zv-s'), im = wrap.querySelector('#zv-i');
+  let w = sc.clientWidth;
+  const MAXW = () => Math.max(im.naturalWidth * 1.5, sc.clientWidth * 3);
+  const zoom = (f, cx = sc.clientWidth / 2, cy = sc.clientHeight / 2) => {
+    const nw = Math.min(MAXW(), Math.max(sc.clientWidth, w * f)), r = nw / w;
+    const ax = (sc.scrollLeft + cx) * r - cx, ay = (sc.scrollTop + cy) * r - cy;
+    w = nw; im.style.width = nw + 'px'; sc.scrollLeft = ax; sc.scrollTop = ay;
+  };
+  wrap.querySelector('#zv-p').onclick = () => zoom(1.6); wrap.querySelector('#zv-m').onclick = () => zoom(1 / 1.6);
+  wrap.querySelector('#zv-f').onclick = () => { w = sc.clientWidth; im.style.width = '100%'; sc.scrollLeft = sc.scrollTop = 0; };
+  wrap.querySelector('#zv-x').onclick = () => wrap.remove();
+  let last = 0; sc.addEventListener('click', (e) => { const now = Date.now(); if (now - last < 320) { const r = sc.getBoundingClientRect(); zoom(w < sc.clientWidth * 1.5 ? 2.5 : 0.01, e.clientX - r.left, e.clientY - r.top); } last = now; });
+  let d0 = 0;
+  const dist = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  sc.addEventListener('touchstart', (e) => { if (e.touches.length === 2) d0 = dist(e); }, { passive: true });
+  sc.addEventListener('touchmove', (e) => { if (e.touches.length === 2 && d0) { e.preventDefault(); const d = dist(e), r = sc.getBoundingClientRect(); zoom(d / d0, (e.touches[0].clientX + e.touches[1].clientX) / 2 - r.left, (e.touches[0].clientY + e.touches[1].clientY) / 2 - r.top); d0 = d; } }, { passive: false });
+  sc.addEventListener('touchend', () => { d0 = 0; }, { passive: true });
+  sc.addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); const r = sc.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - r.left, e.clientY - r.top); } }, { passive: false });
 }
 
 // Preview the message (editable), then send to WhatsApp / copy / system share. pics (optional) adds a one-page picture of the cards.
-export function shareComposer(title, text, pics = null, sub = '') {
+export function shareComposer(title, text, pics = null, sub = '', link = '', imgTitle = '') {
   const s = sheet(`<h2>${esc(title)}</h2><textarea id="sc-t" rows="7" style="width:100%">${esc(text)}</textarea>
     ${pics?.length ? `<div id="sc-pic" class="muted" style="margin:.5rem 0">Making the picture of ${pics.length} card${pics.length === 1 ? '' : 's'}…</div>` : ''}
     <div class="row tight" style="margin-top:.6rem">${pics?.length ? '<button class="btn" id="sc-img" disabled>📷 Share picture + link</button><button class="btn sec" id="sc-save" disabled>Save picture</button>' : ''}<a class="btn ${pics?.length ? 'sec' : ''}" id="sc-wa" target="_blank" rel="noopener">WhatsApp (text)</a><button class="btn sec" id="sc-copy">Copy</button>${navigator.share ? '<button class="btn sec" id="sc-nat">Share…</button>' : ''}</div>`);
@@ -138,11 +196,11 @@ export function shareComposer(title, text, pics = null, sub = '') {
   t.oninput = sync; sync();
   s.el.querySelector('#sc-copy').onclick = async () => { try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } toast('Copied'); };
   const n = s.el.querySelector('#sc-nat'); if (n) n.onclick = () => navigator.share({ text: t.value }).catch(() => {});
-  if (pics?.length) snapshotImage(title, sub, pics).then((blob) => {
+  if (pics?.length) snapshotImage(imgTitle || title, sub, pics, link).then((blob) => {
     const box = s.el.querySelector('#sc-pic'); if (!box) return;
     if (!blob) { box.textContent = 'Could not make the picture.'; return; }
     const url = URL.createObjectURL(blob), file = new File([blob], 'cards.jpg', { type: 'image/jpeg' });
-    box.innerHTML = `<img src="${url}" alt="Snapshot" style="width:100%;max-height:45vh;object-fit:contain;border-radius:8px;background:#14213d">`;
+    box.innerHTML = `<div id="sc-prev" role="button" aria-label="Zoom picture" style="width:100%;height:42vh;border-radius:8px;background:#14213d url(${url}) center/contain no-repeat;cursor:zoom-in"></div><div class="muted" style="font-size:.78rem">Tap the picture to zoom in. ${pics.length} cards on one page.</div>`; box.querySelector('#sc-prev').onclick = () => zoomViewer(url);
     const b1 = s.el.querySelector('#sc-img'), b2 = s.el.querySelector('#sc-save'); b1.disabled = b2.disabled = false;
     b1.onclick = async () => {
       try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text: t.value }); return; } } catch (e) { if (e.name === 'AbortError') return; }
@@ -158,7 +216,7 @@ export function shareComposer(title, text, pics = null, sub = '') {
 export function shareChoice({ title, selCount, build, extra = '' }) {
   const s = sheet(`<h2>${esc(title)}</h2><p class="muted">Choose what to share. The message includes a link and a one-page picture of the cards.</p>
     <div class="row tight"><button class="btn ${selCount ? '' : 'sec'}" id="sc-sel" ${selCount ? '' : 'disabled'}>Share selected (${selCount})</button><button class="btn" id="sc-all">Share all</button></div>${extra}`);
-  const go = (kind) => guard(async () => { const r = await build(kind); s.close(); if (typeof r === 'string') shareComposer(title, r); else shareComposer(title, r.text, r.pics, r.sub || ''); });
+  const go = (kind) => guard(async () => { const r = await build(kind); s.close(); if (typeof r === 'string') shareComposer(title, r); else shareComposer(title, r.text, r.pics, r.sub || '', r.link || '', r.ttl || ''); });
   s.el.querySelector('#sc-sel').onclick = go('selected'); s.el.querySelector('#sc-all').onclick = go('all');
   return s;
 }
