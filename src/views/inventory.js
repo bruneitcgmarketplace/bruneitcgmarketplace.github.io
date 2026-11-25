@@ -1,4 +1,4 @@
-import { fetchAll, rpc, sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
+import { catImg, fetchAll, rpc, sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, invStats, refBnd, cardImg, setName, cardPicker, needLogin, bindLogin, enlarge, confirmSheet, artShort } from '../lib.js';
 import { openShareSheet, shareChoice, shareUrl } from './shared.js';
 import { openListAll } from './listall.js';
 import { cardFilter } from './exploreSets.js';
@@ -72,10 +72,11 @@ export async function viewInventory($app) {
       const link = async () => { let { data: tk, error } = await sb.rpc('my_inventory_share'); if (error) throw new Error(error.message); if (!tk) { const r = await sb.rpc('share_inventory'); if (r.error) throw new Error(r.error.message); tk = r.data; } return shareUrl(tk); };
       const s = shareChoice({ title: 'Share my collection', selCount: sel.size, extra: '<p style="margin-top:.8rem"><button class="btn sec" id="sc-manage">Manage link / stop sharing</button></p>', build: async (kind) => {
         const url = await link();
-        if (kind === 'all') return `Check out ${who} One Piece card collection on Brunei One Piece TCG: ${url}`;
-        const rows = invStats().rows.filter((r) => sel.has(r.c.ref)).sort((a, b) => a.c.code.localeCompare(b.c.code));
+        const rows = invStats().rows.filter((r) => kind === 'all' || sel.has(r.c.ref)).sort((a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref));
+        const pics = rows.map((r) => ({ url: catImg(r.c, '200_280'), tag: r.q > 1 ? `×${r.q}` : '' })), sub = `${rows.length} unique · ${rows.reduce((s, r) => s + r.q, 0)} cards`;
+        if (kind === 'all') return { text: `Check out ${who} One Piece card collection on Brunei One Piece TCG: ${url}`, pics, sub };
         const lines = rows.slice(0, 40).map((r) => `• ${r.c.code} ${r.c.rarity} ${r.c.name} ×${r.q}`);
-        return `${who} One Piece cards (${rows.length} selected):\n${lines.join('\n')}${rows.length > 40 ? `\n…and ${rows.length - 40} more` : ''}\n\nFull collection: ${url}`;
+        return { text: `${who} One Piece cards (${rows.length} selected):\n${lines.join('\n')}${rows.length > 40 ? `\n…and ${rows.length - 40} more` : ''}\n\nFull collection: ${url}`, pics, sub };
       } });
       s.el.querySelector('#sc-manage').onclick = () => { s.close(); guard(() => openShareSheet(who))(); };
     };

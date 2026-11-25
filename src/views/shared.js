@@ -101,23 +101,64 @@ export async function viewShared($app, token) {
 }
 
 
-// Preview the message (editable), then send to WhatsApp / copy / system share.
-export function shareComposer(title, text) {
-  const s = sheet(`<h2>${esc(title)}</h2><textarea id="sc-t" rows="9" style="width:100%">${esc(text)}</textarea>
-    <div class="row tight" style="margin-top:.6rem"><a class="btn" id="sc-wa" target="_blank" rel="noopener">WhatsApp</a><button class="btn sec" id="sc-copy">Copy</button>${navigator.share ? '<button class="btn sec" id="sc-nat">Share…</button>' : ''}</div>`);
+// One-page picture of many cards: { url, tag } each. Returns a JPEG blob (all cards on a single image).
+export async function snapshotImage(title, sub, pics) {
+  const n = pics.length, MAXC = 800; pics = pics.slice(0, MAXC);
+  const size = n > 120 ? '100_140' : '200_280';
+  const cols = Math.min(24, Math.max(3, Math.ceil(Math.sqrt(pics.length * 0.9))));
+  const W = Math.min(2400, Math.max(1080, cols * 150)), pad = 14, gap = 8, head = 110;
+  const cw = Math.floor((W - pad * 2 - gap * (cols - 1)) / cols), ch = Math.round(cw * 1.4), rows = Math.ceil(pics.length / cols);
+  const H = head + pad + rows * (ch + gap);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#14213d'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#ffc83d'; g.fillRect(0, 0, W, 8);
+  g.fillStyle = '#fff'; g.font = `bold ${Math.round(W / 28)}px sans-serif`; g.fillText(title, pad + 6, 62, W - 2 * pad);
+  g.fillStyle = '#c9d1e0'; g.font = `${Math.round(W / 50)}px sans-serif`; g.fillText(sub, pad + 6, 98, W - 2 * pad);
+  const load = (u) => new Promise((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = u; });
+  let next = 0;
+  const worker = async () => { while (next < pics.length) {
+    const k = next++, p = pics[k], x = pad + (k % cols) * (cw + gap), y = head + pad + Math.floor(k / cols) * (ch + gap);
+    const im = await load(p.url.replace(/\/(?:\d+_\d+|front)\//, `/${size}/`));
+    if (im) g.drawImage(im, x, y, cw, ch); else { g.fillStyle = '#2b3a5c'; g.fillRect(x, y, cw, ch); }
+    if (p.tag) { const fs = Math.max(11, Math.round(cw / 5)); g.font = `bold ${fs}px sans-serif`; const w = g.measureText(p.tag).width + fs * 0.7; g.fillStyle = '#c1121f'; g.fillRect(x + cw - w, y + ch - fs * 1.3, w, fs * 1.3); g.fillStyle = '#fff'; g.fillText(p.tag, x + cw - w + fs * 0.35, y + ch - fs * 0.3); }
+  } };
+  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+  if (n > MAXC) { g.fillStyle = '#ffc83d'; g.font = `${Math.round(W / 50)}px sans-serif`; g.fillText(`+${n - MAXC} more cards`, W - 260, 98); }
+  return await new Promise((res) => cv.toBlob(res, 'image/jpeg', 0.85));
+}
+
+// Preview the message (editable), then send to WhatsApp / copy / system share. pics (optional) adds a one-page picture of the cards.
+export function shareComposer(title, text, pics = null, sub = '') {
+  const s = sheet(`<h2>${esc(title)}</h2><textarea id="sc-t" rows="7" style="width:100%">${esc(text)}</textarea>
+    ${pics?.length ? `<div id="sc-pic" class="muted" style="margin:.5rem 0">Making the picture of ${pics.length} card${pics.length === 1 ? '' : 's'}…</div>` : ''}
+    <div class="row tight" style="margin-top:.6rem">${pics?.length ? '<button class="btn" id="sc-img" disabled>📷 Share picture + link</button><button class="btn sec" id="sc-save" disabled>Save picture</button>' : ''}<a class="btn ${pics?.length ? 'sec' : ''}" id="sc-wa" target="_blank" rel="noopener">WhatsApp (text)</a><button class="btn sec" id="sc-copy">Copy</button>${navigator.share ? '<button class="btn sec" id="sc-nat">Share…</button>' : ''}</div>`);
   const t = s.el.querySelector('#sc-t'), wa = s.el.querySelector('#sc-wa');
   const sync = () => { wa.href = 'https://wa.me/?text=' + encodeURIComponent(t.value); };
   t.oninput = sync; sync();
   s.el.querySelector('#sc-copy').onclick = async () => { try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } toast('Copied'); };
   const n = s.el.querySelector('#sc-nat'); if (n) n.onclick = () => navigator.share({ text: t.value }).catch(() => {});
+  if (pics?.length) snapshotImage(title, sub, pics).then((blob) => {
+    const box = s.el.querySelector('#sc-pic'); if (!box) return;
+    if (!blob) { box.textContent = 'Could not make the picture.'; return; }
+    const url = URL.createObjectURL(blob), file = new File([blob], 'cards.jpg', { type: 'image/jpeg' });
+    box.innerHTML = `<img src="${url}" alt="Snapshot" style="width:100%;max-height:45vh;object-fit:contain;border-radius:8px;background:#14213d">`;
+    const b1 = s.el.querySelector('#sc-img'), b2 = s.el.querySelector('#sc-save'); b1.disabled = b2.disabled = false;
+    b1.onclick = async () => {
+      try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text: t.value }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+      const a = document.createElement('a'); a.href = url; a.download = 'cards.jpg'; a.click(); toast('Picture saved. Attach it in WhatsApp and paste the text.');
+      try { await navigator.clipboard.writeText(t.value); } catch { /* ignore */ }
+    };
+    b2.onclick = () => { const a = document.createElement('a'); a.href = url; a.download = 'cards.jpg'; a.click(); };
+  });
   return s;
 }
 
-// Two-choice share sheet: selected items or everything. build(kind) returns the message text.
+// Two-choice share sheet: selected items or everything. build(kind) returns the message text, or { text, pics, sub }.
 export function shareChoice({ title, selCount, build, extra = '' }) {
-  const s = sheet(`<h2>${esc(title)}</h2><p class="muted">Choose what to share. The message includes a link.</p>
+  const s = sheet(`<h2>${esc(title)}</h2><p class="muted">Choose what to share. The message includes a link and a one-page picture of the cards.</p>
     <div class="row tight"><button class="btn ${selCount ? '' : 'sec'}" id="sc-sel" ${selCount ? '' : 'disabled'}>Share selected (${selCount})</button><button class="btn" id="sc-all">Share all</button></div>${extra}`);
-  const go = (kind) => guard(async () => { const text = await build(kind); s.close(); shareComposer(title, text); });
+  const go = (kind) => guard(async () => { const r = await build(kind); s.close(); if (typeof r === 'string') shareComposer(title, r); else shareComposer(title, r.text, r.pics, r.sub || ''); });
   s.el.querySelector('#sc-sel').onclick = go('selected'); s.el.querySelector('#sc-all').onclick = go('all');
   return s;
 }

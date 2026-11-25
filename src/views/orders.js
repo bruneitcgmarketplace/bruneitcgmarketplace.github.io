@@ -1,7 +1,7 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, rateSheet } from '../lib.js';
 import { cardFilter } from './exploreSets.js';
 import { shareChoice } from './shared.js';
-import { fetchAll } from '../lib.js';
+import { fetchAll, catImg } from '../lib.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
@@ -151,7 +151,8 @@ export async function viewOrders($app, opts = {}) {
         shareChoice({ title: 'Share my listings', selCount: boxes().filter((b) => b.checked).length, build: async (kind) => {
           const gs = boxes().filter((b) => kind === 'all' || b.checked).map(grp);
           const lines = gs.slice(0, 15).map(({ ids, l }) => `• ${l.card_code} ${l.rarity || ''} ${l.card_name || ''} ×${ids.length} · BND ${Number(l.price).toFixed(2)}\n  ${base}listing/${ids[0]}`);
-          return `My One Piece cards for sale on Brunei One Piece TCG (${gs.length} card${gs.length === 1 ? '' : 's'}):\n${lines.join('\n')}${gs.length > 15 ? `\n…and ${gs.length - 15} more` : ''}\n\nAll my listings: ${base}user/${uid}`;
+          const cat = state.cat; const pics = gs.map(({ ids, l }) => { const c = cat?.byRef.get(l.card_ref); return { url: c ? catImg(c, '200_280') : (l.catalog_image || ''), tag: `×${ids.length} ${Number(l.price).toFixed(2)}` }; }).filter((p) => p.url);
+          return { text: `My One Piece cards for sale on Brunei One Piece TCG (${gs.length} card${gs.length === 1 ? '' : 's'}):\n${lines.join('\n')}${gs.length > 15 ? `\n…and ${gs.length - 15} more` : ''}\n\nAll my listings: ${base}user/${uid}`, pics, sub: `${gs.length} cards for sale · tag = quantity and price (BND)` };
         } });
       };
       $app.querySelector('#unpick').onclick = () => { const all = boxes().every((b) => b.checked); boxes().forEach((b) => (b.checked = !all)); upd(); };
