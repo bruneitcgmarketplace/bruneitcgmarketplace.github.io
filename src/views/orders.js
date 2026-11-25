@@ -2,7 +2,7 @@ import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listin
 import { cardFilter } from './exploreSets.js';
 import { shareChoice } from './shared.js';
 import { fetchAll, catImg } from '../lib.js';
-import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, listPrice, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
+import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, listPrice, msgInformBuyer, receiptDataMany, msgInformBuyerMany, downloadReceiptMany, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
 // One Sold / Release / Release + strike action for every held card of one buyer.
@@ -12,6 +12,7 @@ function groupSheet(kind, arr) {
     const T = {
       sold: ['Mark cards as sold?', 'Confirm you have met the buyer and been paid for the ticked cards. This completes the deals and takes one copy of each off your inventory if you track it.', 'Sold', 'ok'],
       release: ['Release cards?', 'The ticked cards go back on the Marketplace. The buyer gets no strike.', 'Release', 'sec'],
+      cancelres: ['Cancel reservations?', 'The ticked cards go back on the Marketplace for other buyers.', 'Cancel reservation', 'sec'],
       noshow: ['Release + strike buyer?', 'The ticked cards go back on the Marketplace. The buyer gets ONE strike for not completing the deal, however many cards you release. At 3 strikes they are blocked.', 'Release + strike', 'bad'],
     }[kind];
     const rows = arr.map((l, i) => {
@@ -72,6 +73,7 @@ export async function viewOrders($app, opts = {}) {
   const sel = '*, seller:profiles!listings_seller_id_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)';
 
   const LST = new Map();
+  let HELDB = new Map();  // seller id -> held cards (buyer view)
   let HELD = new Map();   // buyer id -> held cards (seller view)
   let myRated = new Set();   // sold deals I already rated
   try { myRated = new Set(((await sb.from('ratings').select('listing_id').eq('rater_id', uid).limit(2000)).data || []).map((r) => r.listing_id)); } catch {}
@@ -87,12 +89,39 @@ export async function viewOrders($app, opts = {}) {
     <div class="row tight" style="margin:.4rem 0"><select id="rp-per">${Object.entries(PER).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
       <button class="btn sec" data-rp="pdf" data-role="${role}">📄 Report (PDF)</button><button class="btn sec" data-rp="csv" data-role="${role}">📊 Excel (CSV)</button></div>
     <p class="muted">${role === 'sell' ? 'Completed sales' : 'Completed purchases'} for the period, with listing price, final price and the difference (BND and %). Orders still on hold are not included.</p></div>`;
-  const card = async (l, role) => {
+  // Sold deals with the same other person on the same day share one panel (Inform / Receipt / Rate)
+  const SG = new Map();
+  const dayOf = (l) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Brunei' }).format(new Date(l.sold_at || l.created_at));
+  const soldList = async (rows, role) => {
+    const who = (l) => (role === 'sell' ? l.buyer_id : l.seller_id);
+    const groups = new Map();
+    for (const l of rows) if (l.status === 'sold' && who(l)) { const k = `${who(l)}|${dayOf(l)}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(l); }
+    const out = [], done = new Set();
+    for (const l of rows) {
+      const k = l.status === 'sold' && who(l) ? `${who(l)}|${dayOf(l)}` : null, arr = k ? groups.get(k) : null;
+      if (!arr || arr.length < 2) { out.push(card(l, role)); continue; }
+      if (done.has(k)) continue;
+      done.add(k); SG.set(k, arr);
+      out.push((async () => {
+        const items = arr.map((x) => receiptData(x, state.cat.byRef.get(x.card_ref)?.name || x.card_name));
+        const g = receiptDataMany(items);
+        const ct = role === 'sell' ? await contactOf(arr[0]) : null;
+        const todo = arr.filter((x) => !myRated.has(x.id));
+        const other = role === 'sell' ? 'buyer' : 'seller';
+        const nm = esc(role === 'sell' ? (arr[0].buyer?.display_name || '') : (arr[0].seller?.display_name || ''));
+        const cards = (await Promise.all(arr.map((x) => card(x, role, true)))).join('');
+        return `<div class="ogrp"><div class="notice" data-sg="${esc(k)}"><b>${role === 'sell' ? 'Sold to' : 'Bought from'} ${nm}</b> · ${esc(new Date(arr[0].sold_at || arr[0].created_at).toLocaleDateString())} · ${arr.length} cards · ${bnd(g.total)}
+          <div class="row tight" style="margin-top:.5rem">${ct ? `<a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyerMany(g))}">💬 Inform buyer on WhatsApp</a>` : ''}<button class="btn sm-btn sec" data-sgact="receipt">📄 Receipt (PDF)</button>${todo.length ? `<button class="btn sm-btn" data-sgact="rate">⭐ Rate ${other}${todo.length < arr.length ? ` (${todo.length})` : ''}</button>` : '<button class="btn sm-btn sec" disabled>✔ Rated</button>'}</div></div>${cards}</div>`;
+      })());
+    }
+    return (await Promise.all(out)).join('');
+  };
+  const card = async (l, role, grp = false) => {
     LST.set(l.id, l);
     const c = state.cat.byRef.get(l.card_ref);
     const price = listingPrice(l);
     let extra = '', ct = null;
-    if (l.status === 'sold' && role === 'sell') {
+    if (l.status === 'sold' && role === 'sell' && !grp) {
       const ct = await contactOf(l);
       if (ct) extra += `<a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgInformBuyer(receiptData(l, c?.name || l.card_name)))}">💬 Inform buyer on WhatsApp</a> `;
     }
@@ -100,9 +129,8 @@ export async function viewOrders($app, opts = {}) {
     const dcls = pd?.changed ? (role === 'buy' ? (pd.delta < 0 ? 'ok' : 'bad') : (pd.delta < 0 ? 'warn' : 'ok')) : '';
     const acts = [];
     if (role === 'sell' && l.status === 'active' && l.bid_count === 0) { if (l._ids?.length > 1) acts.push(['unlistqty', 'Unlist', 'bad']); else acts.push(['cancel', 'Cancel listing', 'bad']); }
-    if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
-    if (l.status === 'sold') acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
-    if (l.status === 'sold' && l.buyer_id) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
+    if (l.status === 'sold' && !grp) acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
+    if (l.status === 'sold' && l.buyer_id && !grp) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
       <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${l._ids?.length > 1 ? ` <span class="qtag s">×${l._ids.length}</span>` : ''}${stChip(l, uid, role)}</div>
         <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
@@ -140,16 +168,17 @@ export async function viewOrders($app, opts = {}) {
     // held cards under the same seller share ONE 'Inform seller on WhatsApp' button
     const held = new Map();
     for (const l of wonRows) if (l.status === 'reserved') { const k = l.seller_id; if (!held.has(k)) held.set(k, []); held.get(k).push(l); }
-    const heldHtml = (await Promise.all([...held.values()].map(async (arr) => {
+    HELDB = held;
+    const heldHtml = (await Promise.all([...held.entries()].map(async ([sk, arr]) => {
       const ct = await contactOf(arr[0]);
       const items = arr.map((l) => receiptData(l, state.cat.byRef.get(l.card_ref)?.name || l.card_name));
       const total = items.reduce((a, d) => a + Number(d.price || 0), 0);
       const sname = esc(arr[0].seller?.display_name || 'Seller');
-      return `<div class="notice"><b>On hold for you · Seller: ${sname}</b> · ${arr.length} card${arr.length > 1 ? 's' : ''} · ${bnd(total)}<br>Tell the seller you want to buy ${arr.length > 1 ? 'them' : 'it'}.
-        ${ct ? `<br><a class=\"btn sm-btn\" target=\"_blank\" rel=\"noopener\" href=\"${waUrl(ct.whatsapp, msgInformSellerMany(items))}\">💬 Inform seller on WhatsApp</a>` : ''}</div>`;
+      return `<div class="notice" data-bk="${esc(String(sk))}"><b>On hold for you · Seller: ${sname}</b> · ${arr.length} card${arr.length > 1 ? 's' : ''} · ${bnd(total)}<br>Tell the seller you want to buy ${arr.length > 1 ? 'them' : 'it'}.
+        ${ct ? `<br><a class=\"btn sm-btn\" target=\"_blank\" rel=\"noopener\" href=\"${waUrl(ct.whatsapp, msgInformSellerMany(items))}\">💬 Inform seller on WhatsApp</a>` : ''}${arr.some((x) => x.type === 'buy_now') ? '<div class="row tight" style="margin-top:.5rem"><button class="btn sm-btn sec" data-bgact="cancelres">Cancel reservation</button></div>' : ''}</div>`;
     }))).join('');
     body.innerHTML = `<h2>Active bids</h2>${bidding.length ? (await Promise.all(bidding.map((l) => card(l, 'buy')))).join('') : '<p class="muted">No active bids. <a href="#/market?type=auction">Browse auctions</a></p>'}
-      <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${heldHtml}${reportPanel('buy')}${wonRows.length ? (await Promise.all(wonRows.map((l) => card(l, 'buy')))).join('') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
+      <h2 style="margin-top:1.2rem">Purchases and won auctions</h2>${heldHtml}${reportPanel('buy')}${wonRows.length ? await soldList(wonRows, 'buy') : '<p class="muted">Nothing yet. <a href="#/market">Browse listings</a></p>'}`;
   } else if (tab === 'selling') {
     const [live, past] = await Promise.all([
       fetchAll(() => sb.from('listings').select(sel).eq('seller_id', uid).in('status', ['active', 'reserved']).order('created_at', { ascending: false }).order('id')),
@@ -180,10 +209,27 @@ export async function viewOrders($app, opts = {}) {
     body.innerHTML = `<div class="stats"><div class="stat"><b>${rows.length}</b><span>Sold</span></div><div class="stat"><b>${bnd(total)}</b><span>Total sales</span></div><div class="stat"><b>${bnd(thisM)}</b><span>This month</span></div><div class="stat"><b>${net === 0 ? 'At listing' : (net < 0 ? '- ' : '+ ') + bnd(Math.abs(net)) + ' (' + (net < 0 ? '-' : '+') + Math.abs(listed ? (net / listed) * 100 : 0).toFixed(1) + '%)'}</b><span>vs listing prices</span></div></div>
       ${reportPanel('sell')}
       <input id="sq" placeholder="Search sold cards or buyer" style="margin:.6rem 0">
-      <div id="sl">${(await Promise.all(rows.map((l) => card(l, 'sell')))).join('') || '<p class="muted">Nothing sold yet. Sales appear here after you tap "Sold".</p>'}</div>`;
-    body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); };
+      <div id="sl">${(await soldList(rows, 'sell')) || '<p class="muted">Nothing sold yet. Sales appear here after you tap "Sold".</p>'}</div>`;
+    body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); body.querySelectorAll('.ogrp').forEach((g) => (g.style.display = [...g.querySelectorAll('.order')].some((o) => o.style.display !== 'none') ? '' : 'none')); };
   }
   wire(() => viewOrders($app, opts));
+  body.querySelectorAll('[data-sgact]').forEach((b) => (b.onclick = guard(async () => {
+    const arr = SG.get(b.closest('[data-sg]').dataset.sg) || [];
+    if (b.dataset.sgact === 'receipt') { downloadReceiptMany(receiptDataMany(arr.map((x) => receiptData(x, state.cat.byRef.get(x.card_ref)?.name || x.card_name)))); return; }
+    const todo = arr.filter((x) => !myRated.has(x.id)).map((x) => x.id);
+    if (!todo.length) return;
+    const first = arr[0];
+    if (await rateSheet(todo, first.seller_id === uid ? 'buyer' : 'seller')) { todo.forEach((id) => myRated.add(id)); viewOrders($app, opts); }
+  })));
+  body.querySelectorAll('[data-bgact]').forEach((b) => (b.onclick = guard(async () => {
+    const arr = (HELDB.get(b.closest('[data-bk]').dataset.bk) || []).filter((x) => x.type === 'buy_now');
+    const pick = await groupSheet('cancelres', arr);
+    if (!pick) return;
+    let n = 0;
+    try { for (const { l } of pick) { await rpc('cancel_reservation', { p_listing: l.id }); n++; } }
+    catch (e) { toast(`${n} of ${pick.length} cancelled, then: ${e.message || e}`, true); viewOrders($app, opts); return; }
+    toast(`Done: ${n} reservation${n > 1 ? 's' : ''} cancelled`); viewOrders($app, opts);
+  })));
   body.querySelectorAll('[data-gact]').forEach((b) => (b.onclick = guard(async () => {
     const a = b.dataset.gact, arr = HELD.get(b.closest('[data-gb]').dataset.gb) || [];
     const pick = await groupSheet(a, arr);

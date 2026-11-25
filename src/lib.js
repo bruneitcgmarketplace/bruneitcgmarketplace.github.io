@@ -309,9 +309,10 @@ export const starsHtml = (avg, n) => (n ? `<span class="stars" title="${avg.toFi
 export const tagsHtml = (tags = []) => Object.keys(TAGS).filter((k) => tags.includes(k)).map((k) => `<span class="utag t-${k}">${esc(TAGS[k])}</span>`).join(' ');
 // 1-5 star pop-up with an optional comment. Resolves true after the rating is saved.
 export function rateSheet(listingId, whom) {
+  const ids = [].concat(listingId);   // one rating can cover several deals with the same person
   return new Promise((res) => {
     let stars = 0;
-    const s = sheet(`<h2>Rate the ${esc(whom)}</h2><p class="muted">How did the deal go? Your rating is public and cannot be changed later.</p>
+    const s = sheet(`<h2>Rate the ${esc(whom)}${ids.length > 1 ? ` (${ids.length} deals)` : ''}</h2><p class="muted">How did the deal go? Your rating is public and cannot be changed later.</p>
       <div class="starpick" id="rs-stars">${[1, 2, 3, 4, 5].map((i) => `<button type="button" data-s="${i}" aria-label="${i} star${i > 1 ? 's' : ''}">★</button>`).join('')}</div>
       <label>Comment (optional)</label><textarea id="rs-c" rows="3" maxlength="300" placeholder="Fast reply, card as described…"></textarea>
       <div class="row tight" style="margin-top:.6rem"><button class="btn" id="rs-ok" disabled>Submit rating</button><button class="btn sec" id="rs-no">Cancel</button></div>`, { onClose: () => res(false) });
@@ -320,8 +321,9 @@ export function rateSheet(listingId, whom) {
     q('#rs-no').onclick = () => s.close();
     q('#rs-ok').onclick = async () => {
       q('#rs-ok').disabled = true;
-      try { await rpc('rate_user', { p_listing: listingId, p_stars: stars, p_comment: q('#rs-c').value }); toast('Thanks, rating saved'); res(true); s.close(); }
-      catch (e) { q('#rs-ok').disabled = false; toast(e.message || String(e), true); }
+      let done = 0;
+      try { for (const id of ids) { await rpc('rate_user', { p_listing: id, p_stars: stars, p_comment: q('#rs-c').value }); done++; } toast('Thanks, rating saved'); res(true); s.close(); }
+      catch (e) { if (done) { toast(`${done} of ${ids.length} rated, then: ${e.message || e}`, true); res(true); s.close(); return; } q('#rs-ok').disabled = false; toast(e.message || String(e), true); }
     };
   });
 }

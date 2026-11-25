@@ -189,6 +189,60 @@ export function downloadBlob(name, blob) {
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
 }
 export const downloadText = (name, text, mime = 'text/csv') => downloadBlob(name, new Blob(['\ufeff' + text], { type: mime + ';charset=utf-8' }));
+// ---------- one receipt for several cards (same counterparty, same day) ----------
+export function receiptDataMany(ds) {
+  const f = ds[0], r2 = (n) => Math.round(n * 100) / 100;
+  const total = r2(ds.reduce((a, d) => a + Number(d.price || 0), 0)), listing = r2(ds.reduce((a, d) => a + Number(d.listing || 0), 0));
+  const delta = r2(total - listing);
+  return { no: `${f.no}-x${ds.length}`, items: ds, seller: f.seller, buyer: f.buyer, soldAt: f.soldAt, total, listing, delta, pct: listing ? (delta / listing) * 100 : 0, changed: delta !== 0 };
+}
+export const msgInformBuyerMany = (g) => `Hi ${g.buyer}, thank you! Your purchase of ${g.items.length} cards (${money(g.total)} total) is now marked as sold and complete:\n` +
+  g.items.map((d, i) => `${i + 1}. ${d.code} ${d.name} (${d.cond}) ${money(d.price)}`).join('\n') + `\nReceipt no. ${g.no}. I am sending you the PDF receipt in this chat.`;
+
+export function receiptPdfMany(g) {
+  const pages = [];
+  let ops = [];
+  const T = (x, y, size, text, bold, gray) => ops.push(textOp(x, y, size, text, bold, gray));
+  const hr = (y) => ops.push(`0.82 G 0.6 w 40 ${y} m 555 ${y} l S`);
+  const right = (xr, y, size, text, bold, gray) => T(xr - tw(text, size), y, size, text, bold, gray);
+  const band = (first) => {
+    ops.push('0.788 0.145 0.196 rg 0 770 595 72 re f');
+    T(40, 808, 22, 'One Piece TCG', true, 1); T(40, 788, 11, first ? 'Sale receipt' : 'Sale receipt (continued)', false, 1);
+    T(360, 808, 9, 'Receipt no.', false, 1); T(360, 793, 13, g.no, true, 1);
+  };
+  const head = () => { T(40, 640, 8.5, '#  ITEM', false, 0.45); T(320, 640, 8.5, 'COND', false, 0.45); right(470, 640, 8.5, 'LISTING', false, 0.45); right(555, 640, 8.5, 'FINAL', false, 0.45); hr(633); };
+  band(true);
+  T(40, 740, 8.5, 'RECEIPT ISSUED', false, 0.45); T(40, 724, 11, fmtDate(new Date(), true), false, 0);
+  T(300, 740, 8.5, 'MARKED AS SOLD BY THE SELLER', false, 0.45); T(300, 724, 11, fmtDate(g.soldAt, true) || 'Date not recorded for this sale', false, 0);
+  hr(708);
+  T(40, 690, 8.5, 'SELLER', false, 0.45); T(300, 690, 8.5, 'BUYER', false, 0.45);
+  T(40, 674, 13, g.seller, true, 0); T(300, 674, 13, g.buyer, true, 0);
+  hr(656); head();
+  let y = 616, page1 = true;
+  const bottom = () => (page1 ? 110 : 80);
+  g.items.forEach((d, i) => {
+    if (y < bottom()) {
+      pages.push(ops.join('\n')); ops = []; page1 = false; band(false); T(40, 745, 8.5, '#  ITEM', false, 0.45); T(320, 745, 8.5, 'COND', false, 0.45); right(470, 745, 8.5, 'LISTING', false, 0.45); right(555, 745, 8.5, 'FINAL', false, 0.45); hr(738); y = 720;
+    }
+    T(40, y, 10, `${i + 1}.`, false, 0.3); T(60, y, 10, fit(`${d.code}  ${d.name}`, 250, 10), false, 0);
+    T(320, y, 10, fit(d.cond || '', 60, 10), false, 0);
+    right(470, y, 10, num2(d.listing), false, 0.3); right(555, y, 10, num2(d.price), true, 0);
+    y -= 18;
+  });
+  if (y < 200) { pages.push(ops.join('\n')); ops = []; page1 = false; band(false); y = 720; }
+  hr(y + 8);
+  T(40, y - 14, 8.5, `TOTAL FOR ${g.items.length} CARDS`, false, 0.45); right(555, y - 16, 16, money(g.total), true, 0);
+  y -= 34;
+  if (g.changed) { T(40, y, 10, `Listing prices total ${money(g.listing)}   |   ${fmtDelta(g)} from listing prices`, false, 0.25); y -= 22; }
+  T(40, y - 4, 8.5, 'PAYMENT AND HAND-OVER', false, 0.45);
+  wrap('Arranged and completed directly between the buyer and the seller, outside this site.', 95).forEach((ln, i) => T(40, y - 20 - i * 14, 10, ln, false, 0));
+  pages.push(ops.join('\n'));
+  const foot = ['This receipt was generated from the seller\'s confirmation on the One Piece TCG marketplace.',
+    'The site does not take, hold or verify payments, so this receipt is a record of the sales as confirmed by the seller.',
+    'Keep it with your own proof of payment. Times are shown in Brunei time (GMT+8).'];
+  return buildPdf(pages.map((p, i) => p + '\n' + foot.map((ln, k) => textOp(40, 70 - k * 12, 8, ln, false, 0.4)).join('\n') + '\n' + textOp(500, 30, 8, `Page ${i + 1} of ${pages.length}`, false, 0.4)));
+}
+export function downloadReceiptMany(g) { downloadBlob(`Receipt-${g.no}.pdf`, receiptPdfMany(g)); }
 export function downloadReceipt(d) { downloadBlob(`Receipt-${d.no}.pdf`, receiptPdf(d)); }
 export function canShareFiles() {
   try { return !!(navigator.canShare && navigator.canShare({ files: [new File([new Blob(['x'], { type: 'application/pdf' })], 'r.pdf', { type: 'application/pdf' })] })); } catch { return false; }
