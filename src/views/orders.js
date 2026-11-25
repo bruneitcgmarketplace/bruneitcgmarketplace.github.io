@@ -1,9 +1,42 @@
-import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, rateSheet } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, sheet, rateSheet } from '../lib.js';
 import { cardFilter } from './exploreSets.js';
 import { shareChoice } from './shared.js';
 import { fetchAll, catImg } from '../lib.js';
-import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
+import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, listPrice, msgInformBuyer, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
+
+// One Sold / Release / Release + strike action for every held card of one buyer.
+// Resolves the chosen cards [{l, price}] (price null = listing price) or null if cancelled.
+function groupSheet(kind, arr) {
+  return new Promise((res) => {
+    const T = {
+      sold: ['Mark cards as sold?', 'Confirm you have met the buyer and been paid for the ticked cards. This completes the deals and takes one copy of each off your inventory if you track it.', 'Sold', 'ok'],
+      release: ['Release cards?', 'The ticked cards go back on the Marketplace. The buyer gets no strike.', 'Release', 'sec'],
+      noshow: ['Release + strike buyer?', 'The ticked cards go back on the Marketplace. The buyer gets ONE strike for not completing the deal, however many cards you release. At 3 strikes they are blocked.', 'Release + strike', 'bad'],
+    }[kind];
+    const rows = arr.map((l, i) => {
+      const lp = listPrice(l), pr = kind === 'sold' && l.type === 'buy_now';
+      return `<div class="row tight" style="margin:.35rem 0;align-items:center"><label style="flex:1;display:flex;gap:.4rem;align-items:center"><input type="checkbox" data-i="${i}" checked><span>${esc(l.card_code)} ${esc(l.card_name || '')} · ${esc(l.condition)} · ${bnd(lp)}</span></label>${pr ? `<input type="number" inputmode="decimal" step="0.01" min="0.01" data-p="${i}" placeholder="${esc(lp.toFixed(2))}" style="width:5.5rem">` : ''}</div>`;
+    }).join('');
+    const s = sheet(`<h2>${T[0]}</h2><p>${T[1]}</p>${kind === 'sold' ? '<p class="muted">Agreed price per card (BND) is optional: leave it empty to use the listing price.</p>' : ''}${rows}
+      <div class="notice err" id="gs-err" style="display:none"></div>
+      <div class="row tight"><button class="btn ${T[3]}" id="gs-ok">${T[2]}</button><button class="btn sec" id="gs-no">Cancel</button></div>`, { onClose: () => res(null) });
+    const err = s.el.querySelector('#gs-err');
+    s.el.querySelector('#gs-ok').onclick = () => {
+      const out = [];
+      for (const cb of s.el.querySelectorAll('input[data-i]')) {
+        if (!cb.checked) continue;
+        const i = Number(cb.dataset.i), pin = s.el.querySelector(`input[data-p="${i}"]`), v = (pin?.value || '').trim();
+        let price = null;
+        if (v !== '') { price = Math.round(Number(v) * 100) / 100; if (!(price > 0 && price <= 99999999)) { err.textContent = 'Enter an agreed price above 0, or leave it empty.'; err.style.display = ''; return; } }
+        out.push({ l: arr[i], price });
+      }
+      if (!out.length) { err.textContent = 'Tick at least one card.'; err.style.display = ''; return; }
+      res(out); s.close();
+    };
+    s.el.querySelector('#gs-no').onclick = () => s.close();
+  });
+}
 
 const stChip = (l, uid, role) => {
   const m = {
@@ -39,6 +72,7 @@ export async function viewOrders($app, opts = {}) {
   const sel = '*, seller:profiles!listings_seller_id_fkey(display_name), buyer:profiles!listings_buyer_id_fkey(display_name)';
 
   const LST = new Map();
+  let HELD = new Map();   // buyer id -> held cards (seller view)
   let myRated = new Set();   // sold deals I already rated
   try { myRated = new Set(((await sb.from('ratings').select('listing_id').eq('rater_id', uid).limit(2000)).data || []).map((r) => r.listing_id)); } catch {}
   const PER = { all: 'All time', month: 'This month', last: 'Last month', ytd: 'This year' };
@@ -65,7 +99,6 @@ export async function viewOrders($app, opts = {}) {
     const pd = l.status === 'sold' ? priceDiff(l) : null;
     const dcls = pd?.changed ? (role === 'buy' ? (pd.delta < 0 ? 'ok' : 'bad') : (pd.delta < 0 ? 'warn' : 'ok')) : '';
     const acts = [];
-    if (role === 'sell' && l.status === 'reserved') acts.push(['sold', 'Sold', 'ok'], ['release', 'Release', 'sec'], ['noshow', 'Release + strike buyer', 'bad']);
     if (role === 'sell' && l.status === 'active' && l.bid_count === 0) { if (l._ids?.length > 1) acts.push(['unlistqty', 'Unlist', 'bad']); else acts.push(['cancel', 'Cancel listing', 'bad']); }
     if (role === 'buy' && l.status === 'reserved' && l.type === 'buy_now') acts.push(['unreserve', 'Cancel reservation', 'sec']);
     if (l.status === 'sold') acts.push(['receipt', '📄 Receipt (PDF)', 'sec']);
@@ -129,12 +162,13 @@ export async function viewOrders($app, opts = {}) {
     // held cards from the same buyer share ONE 'WhatsApp buyer' button
     const heldBy = new Map();
     for (const l of g(['reserved'])) { const k = l.buyer_id; if (!heldBy.has(k)) heldBy.set(k, []); heldBy.get(k).push(l); }
-    const heldPanels = (await Promise.all([...heldBy.values()].map(async (arr) => {
+    HELD = heldBy;
+    const heldPanels = (await Promise.all([...heldBy.entries()].map(async ([bk, arr]) => {
       const ct = await contactOf(arr[0]);
       const items = arr.map((l) => receiptData(l, state.cat.byRef.get(l.card_ref)?.name || l.card_name));
       const total = items.reduce((a, d) => a + Number(d.price || 0), 0);
-      return `<div class="notice"><b>On hold: Buyer ${esc(arr[0].buyer?.display_name || '')}</b> · ${arr.length} card${arr.length > 1 ? 's' : ''} · ${bnd(total)}<br>Contact the buyer on WhatsApp. After the meet-up and payment, tap Sold on each card.
-        ${ct ? `<br><a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgMeetBuyerMany(items, ct.display_name))}">💬 WhatsApp buyer</a>` : ''}</div>`;
+      return `<div class="notice" data-gb="${esc(String(bk))}"><b>On hold: Buyer ${esc(arr[0].buyer?.display_name || '')}</b> · ${arr.length} card${arr.length > 1 ? 's' : ''} · ${bnd(total)}<br>Contact the buyer on WhatsApp. After the meet-up and payment, tap Sold.
+        ${ct ? `<br><a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgMeetBuyerMany(items, ct.display_name))}">💬 WhatsApp buyer</a>` : ''}<div class="row tight" style="margin-top:.5rem"><button class="btn ok" data-gact="sold">Sold</button><button class="btn sec" data-gact="release">Release</button><button class="btn bad" data-gact="noshow">Release + strike buyer</button></div></div>`;
     }))).join('');
     const sect = async (t, arr, empty) => `<h2>${t}</h2>${arr.length ? (await Promise.all(combine(arr).map((l) => card(l, 'sell')))).join('') : `<p class="muted">${empty}</p>`}`;
     body.innerHTML = `${only ? '' : '<p><a class="btn" href="#/sell">+ New listing</a></p>'}${(await sect('Needs settlement', g(['reserved']), 'None.')).replace('</h2>', '</h2>' + heldPanels)}<div style="height:.8rem"></div>${g(['active']).some((l) => l.type === 'buy_now') ? '<div class="unl" id="unl"><button class="btn sec sm-btn" id="unsel" disabled>Unlist selected (0)</button><button class="btn sec sm-btn" id="unpick">Select all</button><button class="btn bad sm-btn" id="unall">Unlist all</button><button class="btn sm-btn" id="unshare">Share</button></div>' : ''}${await sect('Active listings', g(['active']), 'No active listings.')}<div style="height:.8rem"></div>${await sect('Ended and cancelled', g(['ended', 'cancelled']).slice(0, 15), 'None.')}`;
@@ -150,6 +184,20 @@ export async function viewOrders($app, opts = {}) {
     body.querySelector('#sq').oninput = (e) => { const t = e.target.value.toLowerCase(); body.querySelectorAll('.order').forEach((o) => (o.style.display = o.textContent.toLowerCase().includes(t) ? '' : 'none')); };
   }
   wire(() => viewOrders($app, opts));
+  body.querySelectorAll('[data-gact]').forEach((b) => (b.onclick = guard(async () => {
+    const a = b.dataset.gact, arr = HELD.get(b.closest('[data-gb]').dataset.gb) || [];
+    const pick = await groupSheet(a, arr);
+    if (!pick) return;
+    let n = 0;
+    try {
+      for (const { l, price } of pick) {
+        if (a === 'sold') await rpc('mark_sold', { p_listing: l.id, p_agreed_price: l.type === 'buy_now' ? price : null });
+        else await rpc('seller_release', { p_listing: l.id, p_no_show: a === 'noshow' && n === 0 });   // one strike per group
+        n++;
+      }
+    } catch (e) { toast(`${n} of ${pick.length} done, then: ${e.message || e}`, true); viewOrders($app, opts); return; }
+    toast(`Done: ${n} card${n > 1 ? 's' : ''}`); viewOrders($app, opts);
+  })));
   {
     const boxes = () => [...body.querySelectorAll('input[data-sel]')];
     const qtyOf = (b) => { const ids = b.dataset.sel.split(','); const inp = $app.querySelector(`input[data-uq="${ids[0]}"]`); const v = Math.floor(Number(inp?.value)); return v >= 1 ? Math.min(v, ids.length) : 1; };
