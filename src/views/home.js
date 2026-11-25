@@ -39,9 +39,7 @@ export async function viewHome($app) {
       const totalCards = inv ? [...inv.values()].reduce((sum,q) => sum + (Number.isSafeInteger(q) && q > 0 ? q : 0),0) : null;
       const hero = signed ? `<div class="hero"><div class="muted">Brunei One Piece TCG</div><h1>Your One Piece hub</h1><p class="muted">Manage your cards, discover listings and follow the latest updates.</p><div class="row tight"><a class="btn" href="#/inventory">Open inventory</a><a class="btn sec" href="#/scan">Scan cards</a></div></div>` : `<div class="hero"><div class="muted">Welcome</div><h1>Buy, sell and auction One Piece cards in Brunei</h1><p class="muted">Free to buy, sell and bid. List cards with Buy now or run an auction.</p><button class="btn" id="login-btn">Sign in with Google</button></div>`;
       const soldN = soldSum && Number.isFinite(soldSum.n) ? soldSum : null;
-      const soldCard = `<a class="panel sold-card" href="#/sold"><div><b>Sold cards</b><span class="muted">${soldN ? `${soldN.n.toLocaleString('en-GB')} sold · ${Number(soldN.n7 || 0).toLocaleString('en-GB')} in the last 7 days` : 'See recent sales and their prices'}</span></div><span class="go">See all ›</span></a>`;
-      const html = `${hero}${renderHomeStats({signed,totalCards,listingCount:listingCount.error ? null : listingCount.count,auctionCount:auctionCount.error ? null : auctionCount.count})}
-        ${soldCard}
+      const html = `${hero}${renderHomeStats({signed,totalCards,listingCount:listingCount.error ? null : listingCount.count,auctionCount:auctionCount.error ? null : auctionCount.count,soldCount:soldN ? soldN.n : null,soldWeek:soldN ? Number(soldN.n7 || 0) : null})}
         <p class="feed-meta price-stamp">Card prices last refreshed: <b>${esc(fmtBrunei(state.cat?.updated))}</b> (Brunei time). Prices refresh every 3 hours.</p>
         ${row('Live listing',listings,'#/market?type=buy_now','No buy-now listings yet. Sell a card to get started.')}
         ${row('Live auction',auctions,'#/market?type=auction','No live auctions right now. Check back soon.')}

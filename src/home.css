@@ -37,3 +37,11 @@
 .latest-card .t-name { line-height:1.35; font-size:.76rem; }
 .home-refresh-note { margin-top:1.5rem; border-top:1px solid var(--line); padding-top:1rem; }
 @media(min-width:640px) { .release-feed { grid-template-columns:repeat(2,minmax(0,1fr)); } .home-stats .stat { min-height:120px; } }
+.home-stats.four { grid-template-columns:repeat(4,minmax(0,1fr)); gap:.4rem; }
+.home-stats.four .stat { padding:.7rem .3rem; min-height:122px; }
+.home-stats.four .stat b { font-size:1.3rem; }
+.home-stats.four .stat span { font-size:.7rem; }
+.home-stats.four .stat small { font-size:.6rem; }
+.home-stats .stat:nth-child(4) { border-top-color:var(--straw); }
+.home-stats .stat:nth-child(4) b { color:#a94c0b; }
+@media(max-width:359px) { .home-stats.four .stat b { font-size:1.05rem; } }

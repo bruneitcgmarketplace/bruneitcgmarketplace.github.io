@@ -9,11 +9,13 @@ export function fmtBrunei(iso) {
   if (Number.isNaN(d.getTime())) return s;
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Brunei', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(d) + ' GMT+8';
 }
-export function renderHomeStats({signed,totalCards,listingCount,auctionCount}) {
-  return `<div class="stats home-stats">
+export function renderHomeStats({signed,totalCards,listingCount,auctionCount,soldCount,soldWeek}) {
+  const withSold = soldCount !== undefined;   // 4th card: public Sold board (omitted when the caller does not pass it)
+  return `<div class="stats home-stats${withSold ? ' four' : ''}">
     <a class="stat" href="#/inventory"><b>${signed ? count(totalCards) : '—'}</b><span>Total card collection</span><small>${signed ? totalCards == null ? 'Temporarily unavailable' : 'Cards in your collection' : 'Sign in to view your cards'}</small></a>
     <a class="stat" href="#/market?type=buy_now"><b>${count(listingCount)}</b><span>Live listing</span><small>${listingCount == null ? 'Temporarily unavailable' : 'Buy-now listings'}</small></a>
-    <a class="stat" href="#/market?type=auction"><b>${count(auctionCount)}</b><span>Live auction</span><small>${auctionCount == null ? 'Temporarily unavailable' : 'Open for bidding'}</small></a>
+    <a class="stat" href="#/market?type=auction"><b>${count(auctionCount)}</b><span>Live auction</span><small>${auctionCount == null ? 'Temporarily unavailable' : 'Open for bidding'}</small></a>${withSold ? `
+    <a class="stat" href="#/sold"><b>${count(soldCount)}</b><span>Sold cards</span><small>${soldCount == null ? 'See recent sales' : Number.isSafeInteger(soldWeek) ? `${count(soldWeek)} in 7 days` : 'Recent sales'}</small></a>` : ''}
   </div>`;
 }
 
