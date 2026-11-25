@@ -28,8 +28,9 @@ export async function viewMarket($app, setUnsub) {
       <input id="q" type="search" placeholder="Search code or name" value="${esc(f.q || '')}">
       <button class="btn sec" id="fbtn">⚙ Filters</button>
       <div class="two"><select id="sort" aria-label="Sort by"></select><button class="btn sec" id="seller" type="button" aria-label="Sellers">All sellers</button><div class="vsw" id="vsw" role="group" aria-label="View"><button data-v="list" title="List" aria-label="List view">☰</button><button data-v="grid" title="Grid" aria-label="Grid view">▦</button><button data-v="tiles" title="Tiles" aria-label="Tiles view">▪▪▪</button></div></div></div>
+    <label class="mall" id="mpall" hidden><span class="mk" id="mpmk"></span><b id="mpmt">Select all</b></label>
     <div id="list" class="grid"><p class="muted">Loading…</p></div>
-    <div class="pickbar" id="mpbar" hidden><button class="btn sec" id="mpall">Select all</button><button class="btn" id="mpgo" disabled>Share selected (0)</button></div>`;
+    <div class="pickbar" id="mpbar" hidden><button class="btn" id="mpgo" disabled>Share selected (0)</button></div>`;
   const setTab = (pref) => {
     $app.querySelectorAll('#mt a').forEach((a) => a.classList.toggle('on', a.dataset.t === type));
     const s = $app.querySelector('#sort');
@@ -83,7 +84,9 @@ export async function viewMarket($app, setUnsub) {
     $app.querySelector('#msel').className = 'btn ' + (selMode ? '' : 'sec'); $app.querySelector('#msel').textContent = selMode ? '☑ Done' : '☑ Select';
     const n = curRows.filter((l) => pick.has(l.id)).length, go = $app.querySelector('#mpgo');
     go.textContent = `Share selected (${n})`; go.disabled = !n; go.className = 'btn' + (n ? '' : ' sec');
-    $app.querySelector('#mpall').textContent = curRows.length && n === curRows.length ? 'Clear' : `Select all (${curRows.length})`;
+    const full = curRows.length > 0 && n === curRows.length;
+    $app.querySelector('#mpall').hidden = !selMode; $app.querySelector('#mpmk').textContent = full ? '✓' : n ? '–' : '';
+    $app.querySelector('#mpmt').textContent = full ? `Unselect all (${curRows.length})` : `Select all (${curRows.length})`;
   }
   function decorate() {
     const el = $app.querySelector('#list'); el.classList.toggle('selmode', selMode);
@@ -134,7 +137,7 @@ export async function viewMarket($app, setUnsub) {
   $app.querySelector('#mshare').onclick = openShare;
   $app.querySelector('#mpgo').onclick = openShare;
   $app.querySelector('#msel').onclick = () => { selMode = !selMode; paint(); };
-  $app.querySelector('#mpall').onclick = () => { const all = curRows.length && curRows.every((l) => pick.has(l.id)); curRows.forEach((l) => (all ? pick.delete(l.id) : pick.add(l.id))); paint(); };
+  $app.querySelector('#mpall').onclick = (e) => { e.preventDefault(); const all = curRows.length && curRows.every((l) => pick.has(l.id)); curRows.forEach((l) => (all ? pick.delete(l.id) : pick.add(l.id))); paint(); };
   rpc('close_ended_auctions').catch(() => {});
   const load = async () => {
     const q = $app.querySelector('#q').value.trim(), t = type, sort = $app.querySelector('#sort').value;
