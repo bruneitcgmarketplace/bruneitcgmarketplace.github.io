@@ -45,3 +45,6 @@
 .home-stats .stat:nth-child(4) { border-top-color:var(--straw); }
 .home-stats .stat:nth-child(4) b { color:#a94c0b; }
 @media(max-width:359px) { .home-stats.four .stat b { font-size:1.05rem; } }
+
+/* auto-drifting rails on Home: no snapping or smooth-scroll so the slow drift stays even */
+.home-live .hscroll { scroll-snap-type:none; scroll-behavior:auto; }

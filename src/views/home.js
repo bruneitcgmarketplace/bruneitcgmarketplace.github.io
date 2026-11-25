@@ -53,4 +53,31 @@ export async function viewHome($app) {
     }
   }
   await refresh();
+  // Live listing / Live auction rails drift slowly to the right; they pause while touched, then continue.
+  if (typeof requestAnimationFrame === 'function' && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+    const SPEED = 24, st = new WeakMap(); let last = 0;   // pixels per second
+    const tick = (ts) => {
+      if (!$app.isConnected) return;
+      const dt = last ? Math.min(ts - last, 100) / 1000 : 0; last = ts;
+      for (const el of $app.querySelectorAll('.home-live .hscroll')) {
+        let s = st.get(el);
+        if (!s) {
+          s = { pos: el.scrollLeft, hold: ts + 1500, end: 0 }; st.set(el, s);
+          const pause = () => { s.hold = performance.now() + 6000; };
+          for (const ev of ['touchstart', 'pointerdown', 'wheel', 'mouseenter', 'focusin']) el.addEventListener(ev, pause, { passive: true });
+        }
+        if (ts < s.hold) { s.pos = el.scrollLeft; s.end = 0; continue; }
+        const max = el.scrollWidth - el.clientWidth;
+        if (max <= 4) continue;
+        if (s.pos >= max - 1) {
+          if (!s.end) s.end = ts;
+          else if (ts - s.end > 2000) { el.scrollLeft = 0; s.pos = 0; s.end = 0; s.hold = ts + 1500; }
+          continue;
+        }
+        s.pos = Math.min(max, s.pos + SPEED * dt); el.scrollLeft = s.pos;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
 }
