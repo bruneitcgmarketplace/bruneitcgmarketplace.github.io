@@ -26,13 +26,16 @@ export function priceDiff(l) {
 // "- BND 5.00 (-4.0%)" or "+ BND 5.00 (+4.0%)"
 export const fmtDelta = (x) => `${x.delta < 0 ? '-' : '+'} ${money(Math.abs(x.delta))} (${x.pct < 0 ? '-' : '+'}${Math.abs(x.pct).toFixed(1)}%)`;
 
+// catalogue names sometimes end with the card code ("Buggy - ST17-003"): drop it where the code is already shown
+export const cleanName = (n, code) => { const s = String(n ?? ''); const c = String(code || ''); if (!c || !s.toLowerCase().endsWith(c.toLowerCase())) return s; const h = s.slice(0, s.length - c.length).replace(/[\s\-\u2013\u2014:(]+$/, ''); return h || s; };
+
 export function receiptData(l, name) {
   const when = l.sold_at || l.created_at;
   const ymd = (() => { const d = new Date(when); return Number.isNaN(+d) ? '00000000' : new Intl.DateTimeFormat('en-CA', { timeZone: BN_TZ }).format(d).replace(/-/g, ''); })();
   const pd = priceDiff(l);
   return {
     no: `RCP-${ymd}-${String(l.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`,
-    id: l.id, code: l.card_code, name: name || l.card_name, rarity: l.rarity || '-', cond: l.condition, lang: l.language || '-',
+    id: l.id, code: l.card_code, name: cleanName(name || l.card_name, l.card_code), rarity: l.rarity || '-', cond: l.condition, lang: l.language || '-',
     price: pd.final, listing: pd.listing, changed: pd.changed, delta: pd.delta, pct: pd.pct, type: l.type,
     seller: l.seller?.display_name || 'Seller', buyer: l.buyer?.display_name || 'Buyer', soldAt: l.sold_at || null,
     url: typeof location !== 'undefined' ? listingUrl(l.id) : '',

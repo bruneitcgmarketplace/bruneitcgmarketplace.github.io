@@ -2,7 +2,7 @@ import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listin
 import { cardFilter } from './exploreSets.js';
 import { shareChoice } from './shared.js';
 import { fetchAll, catImg } from '../lib.js';
-import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, listPrice, msgInformBuyer, receiptDataMany, msgInformBuyerMany, downloadReceiptMany, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
+import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, listPrice, msgInformBuyer, cleanName, receiptDataMany, msgInformBuyerMany, downloadReceiptMany, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
 
 // One Sold / Release / Release + strike action for every held card of one buyer.
@@ -133,7 +133,7 @@ export async function viewOrders($app, opts = {}) {
     if (l.status === 'sold' && l.buyer_id && !grp) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
       <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${l._ids?.length > 1 ? ` <span class="qtag s">×${l._ids.length}</span>` : ''}${stChip(l, uid, role)}</div>
-        <div class="muted nm">${esc(c?.name || l.card_name)} · ${esc(l.condition)}</div>
+        <div class="muted nm">${esc(cleanName(c?.name || l.card_name, l.card_code))} · ${esc(l.condition)}</div>
         <div><span class="price">${bnd(pd ? pd.final : price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
         ${pd ? (pd.changed ? `<div class="row tight" style="margin:.2rem 0"><span class="chip ${dcls}">${esc(fmtDelta(pd))} from listing price</span><span class="muted">Listing price ${bnd(pd.listing)}</span></div>` : '<div class="muted">Sold at the listing price</div>') : ''}
