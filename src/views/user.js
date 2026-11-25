@@ -7,13 +7,13 @@ export async function viewUser($app, id) {
   if (!p) { $app.innerHTML = '<div class="notice err">User not found</div>'; return; }
   const [meta, rv, act] = await Promise.all([
     userMeta([id]),
-    sb.from('ratings').select('id, stars, comment, created_at, rater:profiles!ratings_rater_id_fkey(display_name)').eq('ratee_id', id).order('created_at', { ascending: false }).limit(100),
+    sb.from('ratings').select('id, rater_id, batch, stars, comment, created_at, rater:profiles!ratings_rater_id_fkey(display_name)').eq('ratee_id', id).order('created_at', { ascending: false }).limit(100),
     sb.from('listings').select('id', { count: 'exact', head: true }).eq('seller_id', id).eq('status', 'active'),
   ]);
   const live = await fetchAll(() => sb.from('listings').select('*, seller:profiles!listings_seller_id_fkey(display_name)').eq('seller_id', id).or('status.eq.active,and(status.eq.reserved,type.eq.buy_now)').order('created_at', { ascending: false }).order('id'));
   await primeMeta(live);
   const tiles = [...groupBuyNow(live.filter((l) => l.type === 'buy_now')), ...live.filter((l) => l.type !== 'buy_now')];
-  const m = meta.get(id) || { avg: 0, n: 0, tags: [] }, rows = rv.data || [];
+  const m = meta.get(id) || { avg: 0, n: 0, tags: [] }, rows = [...new Map((rv.data || []).map((r) => [r.rater_id + r.batch, r])).values()];   // one review per transaction
   const dist = [5, 4, 3, 2, 1].map((s) => [s, rows.filter((r) => r.stars === s).length]);
   const isAdmin = !!state.me?.is_admin;
   $app.innerHTML = `<p><a href="javascript:history.back()">← Back</a></p>

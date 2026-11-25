@@ -321,8 +321,8 @@ export function rateSheet(listingId, whom) {
     q('#rs-no').onclick = () => s.close();
     q('#rs-ok').onclick = async () => {
       q('#rs-ok').disabled = true;
-      let done = 0;
-      try { for (const id of ids) { await rpc('rate_user', { p_listing: id, p_stars: stars, p_comment: q('#rs-c').value }); done++; } toast('Thanks, rating saved'); res(true); s.close(); }
+      let done = 0; const batch = crypto.randomUUID();   // all deals in this pop-up are ONE review
+      try { for (const id of ids) { await rpc('rate_user', { p_listing: id, p_stars: stars, p_comment: q('#rs-c').value, p_batch: batch }); done++; } toast('Thanks, rating saved'); res(true); s.close(); }
       catch (e) { if (done) { toast(`${done} of ${ids.length} rated, then: ${e.message || e}`, true); res(true); s.close(); return; } q('#rs-ok').disabled = false; toast(e.message || String(e), true); }
     };
   });
