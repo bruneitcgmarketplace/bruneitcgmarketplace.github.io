@@ -136,19 +136,22 @@ export async function snapshotImage(title, sub, pics, link = '') {
   const FONT = `"Anton", Impact, "Haettenschweiler", "Arial Narrow Bold", "Roboto Condensed", sans-serif`;
   const BODY = `"Roboto Condensed", "Arial Narrow", "Segoe UI", Roboto, sans-serif`;
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
-  const u = W / 1200, band = Math.max(8, Math.round(10 * u));
+  const u = W / 1200, hu = Math.min(u, head / 215), band = Math.max(8, Math.round(10 * u));
   const stripe = (y) => { const cs = [RED, GOLD, GREEN, ORANGE, BLUE], w = W / cs.length; cs.forEach((c, i) => { g.fillStyle = c; g.fillRect(Math.round(i * w), y, Math.ceil(w), band); }); };
   stripe(0);
-  const tw = Math.round(14 * u), ty = Math.round(head * 0.24), th = Math.round(head * 0.50);
-  g.fillStyle = RED; g.fillRect(x0, ty, tw, th);
-  g.fillStyle = NAVY; g.textBaseline = 'alphabetic'; g.font = `400 ${Math.round(64 * u)}px ${FONT}`;
-  g.fillText(title.toUpperCase(), x0 + tw + Math.round(18 * u), ty + Math.round(th * 0.50), W - 2 * x0 - Math.round(260 * u));
-  g.fillStyle = '#6b7280'; g.font = `700 ${Math.round(26 * u)}px ${BODY}`;
-  g.fillText(sub.toUpperCase(), x0 + tw + Math.round(18 * u), ty + th - Math.round(2 * u), W - 2 * x0 - Math.round(260 * u));
-  // card count, right aligned
-  g.textAlign = 'right'; g.fillStyle = RED; g.font = `400 ${Math.round(72 * u)}px ${FONT}`; g.fillText(String(n), W - x0, ty + Math.round(th * 0.62));
-  g.fillStyle = '#6b7280'; g.font = `700 ${Math.round(22 * u)}px ${BODY}`; g.fillText(n === 1 ? 'CARD' : 'CARDS', W - x0, ty + th - Math.round(2 * u)); g.textAlign = 'left';
-  g.fillStyle = NAVY; g.fillRect(x0, Math.round(head * 0.88), W - 2 * x0, Math.max(3, Math.round(4 * u)));
+  // header block sits inside [band, head]; every size derives from the header height so nothing is clipped
+  const top = band + Math.round(head * 0.10), blk = Math.round(head * 0.62);
+  const tw = Math.round(14 * hu), tx = x0 + tw + Math.round(18 * hu), mw = W - 2 * x0 - Math.round(300 * hu);
+  g.fillStyle = RED; g.fillRect(x0, top, tw, blk);
+  g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
+  const bold = (txt, x, y, w, ink, lw) => { g.fillStyle = ink; g.strokeStyle = ink; g.lineWidth = lw; g.strokeText(txt, x, y, w); g.fillText(txt, x, y, w); };
+  g.font = `400 ${Math.round(70 * hu)}px ${FONT}`; bold(title.toUpperCase(), tx, top + Math.round(blk * 0.60), mw, NAVY, Math.max(1, Math.round(1.6 * hu)));
+  g.font = `800 ${Math.round(26 * hu)}px ${BODY}`; g.fillStyle = '#6b7280'; g.fillText(sub.toUpperCase(), tx, top + blk, mw);
+  g.textAlign = 'right';
+  g.font = `400 ${Math.round(76 * hu)}px ${FONT}`; bold(String(n), W - x0, top + Math.round(blk * 0.60), Math.round(280 * hu), RED, Math.max(1, Math.round(1.2 * hu)));
+  g.font = `800 ${Math.round(24 * hu)}px ${BODY}`; g.fillStyle = '#6b7280'; g.fillText(n === 1 ? 'CARD' : 'CARDS', W - x0, top + blk);
+  g.textAlign = 'left';
+  g.fillStyle = NAVY; g.fillRect(x0, Math.round(head * 0.90), W - 2 * x0, Math.max(3, Math.round(4 * hu)));
   // cards
   const load = (url) => new Promise((res) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
   const drawTag = (txt, x, y, fs, fill, ink, align) => {
