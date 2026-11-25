@@ -23,11 +23,11 @@ export async function viewOrders($app, opts = {}) {
   await loadCatalog();
   const uid = state.user.id;
   const only = opts.only || null;                       // 'selling' = the My listings page
-  const tab = only || sessionStorage.getItem('otab') || 'buying';
+  const tab = only || (sessionStorage.getItem('otab') === 'sold' ? 'sold' : 'buying');
   $app.innerHTML = `<div class="head"><h1>${only ? 'My listings' : 'Orders'}</h1><div class="row tight"><div class="vsw" id="ovw"><button data-v="list" aria-label="List">☰</button><button data-v="grid" aria-label="Grid">▦</button><button data-v="tiles" aria-label="Tiles">▪▪▪</button></div><button class="btn sec" id="ofb">⚙ Filters</button><button class="btn sec" id="rf">↻</button></div></div>
     ${state.me?.strikes ? `<div class="notice err">You have ${state.me.strikes} strike(s). At 3 you are blocked from bidding, buying and listing.</div>` : ''}
  ${only ? '<p><a class="btn" href="#/sell">+ New listing</a></p>' : ''}
-    <div class="seg" ${only ? 'style="display:none"' : ''}><a data-t="buying" class="${tab === 'buying' ? 'on' : ''}">Buying</a><a data-t="selling" class="${tab === 'selling' ? 'on' : ''}">Selling</a><a data-t="sold" class="${tab === 'sold' ? 'on' : ''}">Sold history</a></div>
+    <div class="seg" ${only ? 'style="display:none"' : ''}><a data-t="buying" class="${tab === 'buying' ? 'on' : ''}">Buying</a><a data-t="sold" class="${tab === 'sold' ? 'on' : ''}">Sold history</a></div>
     <div id="body"><div class="loading">Loading…</div></div>`;
   $app.querySelectorAll('.seg a').forEach((a) => (a.onclick = () => { sessionStorage.setItem('otab', a.dataset.t); viewOrders($app); }));
   $app.querySelector('#rf').onclick = () => viewOrders($app, opts);
