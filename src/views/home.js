@@ -19,13 +19,13 @@ export async function viewHome($app) {
     } catch { /* Keep last-successful data and original source timestamps. */ }
     return feed;
   }
-  const row = (title, result, href, empty) => `<section class="home-live"><div class="sec-h"><h2>${title}</h2><a href="${href}">See all</a></div>${result.error ? '<div class="panel muted">Listings are temporarily unavailable. Please try again shortly.</div>' : result.data?.length ? `<div class="hscroll">${groupBuyNow(result.data).slice(0,12).map(tile).join('')}</div>` : `<div class="panel muted">${empty}</div>`}</section>`;
+  const row = (title, result, href, empty) => `<section class="home-live"><div class="sec-h"><h2>${title}</h2><a href="${href}">See all</a></div>${result.error ? '<div class="panel muted">Listings are temporarily unavailable. Please try again shortly.</div>' : result.data?.length ? `<div class="hscroll">${groupBuyNow(result.data).slice(0,20).map(tile).join('')}</div>` : `<div class="panel muted">${empty}</div>`}</section>`;
   async function refresh() {
     try {
       const now = new Date().toISOString();
       const [inv, listings, auctions, listingCount, auctionCount, soldSum] = await Promise.all([
         signed ? loadInv(true).catch(() => null) : null,
-        sb.from('listings').select('*').eq('status','active').eq('type','buy_now').order('created_at',{ascending:false}).limit(600),
+        sb.from('listings').select('*').eq('status','active').eq('type','buy_now').order('created_at',{ascending:false}).limit(1000),
         sb.from('listings').select('*').eq('status','active').eq('type','auction').gt('ends_at',now).order('ends_at').limit(100),
         sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','buy_now'),
         sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','auction').gt('ends_at',now),
