@@ -4,6 +4,7 @@ import { initLightbox } from './lightbox.js';
 import { viewCart } from './views/cart.js';
 import { viewAccount } from './views/account.js';
 import { cartIds } from './cart.js';
+import { pushPrompt, syncPush } from './push.js';
 import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, signOut, isMember, fmtLeft, initHd, avatarHtml } from './lib.js';
 import { viewShared } from './views/shared.js';
 import { viewSold } from './views/sold.js';
@@ -136,8 +137,9 @@ async function boot() {
   sb.auth.onAuthStateChange(async (_e, session) => {
     const changed = (session?.user?.id || null) !== (state.user?.id || null);
     state.user = session?.user || null;
-    if (changed) { await loadMe(); route(); }
+    if (changed) { await loadMe(); route(); syncPush(); pushPrompt(); }
   });
   route();
+  syncPush(); pushPrompt();
 }
 boot();
