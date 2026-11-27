@@ -1,4 +1,4 @@
-import { sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard, primeMeta, groupBuyNow, listRow } from '../lib.js';
+import { sheet, sb, state, esc, bnd, toast, guard, loadCatalog, loadInv, invAdjust, refBnd, cardImg, catImg, sharpen, setName, tile, listingPrice, enlarge, colorDot, rpc, ART, yuyuCard, primeMeta, groupBuyNow, listRow, KINDS } from '../lib.js';
 import { fallbackNote } from '../fallback.js';
 import { shareChoice } from './shared.js';
 import { filterSheet, FRESH, activeCount, matchSync, needsInfo, loadInfo } from './exploreSets.js';
@@ -20,6 +20,8 @@ export async function viewMarket($app, setUnsub) {
   const applyView = () => { const el = $app.querySelector('#list'); if (el) el.className = view === 'list' ? 'lrows' : view === 'tiles' ? 'grid tiles' : 'grid'; $app.querySelectorAll('#vsw button').forEach((b) => b.classList.toggle('on', b.dataset.v === view)); };
   let sel = new Set(JSON.parse(sessionStorage.getItem('msel2') || '[]'));   // chosen seller ids (empty = all)
   let sellers = new Map();   // id -> { name, n } for this tab
+  const KIND_PL = { card: 'Single cards', promo: 'Promo / other cards', pack: 'Sealed packs', box: 'Booster boxes', case: 'Cases', slab: 'Graded slabs', other: 'Other items' };
+  let kindSel = sessionStorage.getItem('mkind') || 'all';   // item type filter
   let curRows = [];
   let selMode = false; const pick = new Set();   // chosen listing ids (the first id of a combined group)   // what the page currently shows (after filters, grouping, sort)
   $app.innerHTML = `<div class="head" style="margin-bottom:.4rem"><h1 style="margin:0">Marketplace</h1><div class="row tight"><button class="btn sec" id="msel">☑ Select</button><button class="btn sec" id="mshare">🔗 Share</button></div></div>
@@ -28,6 +30,7 @@ export async function viewMarket($app, setUnsub) {
       <input id="q" type="search" placeholder="Search code or name" value="${esc(f.q || '')}">
       <button class="btn sec" id="fbtn">⚙ Filters</button>
       <div class="two"><select id="sort" aria-label="Sort by"></select><button class="btn sec" id="seller" type="button" aria-label="Sellers">All sellers</button><div class="vsw" id="vsw" role="group" aria-label="View"><button data-v="list" title="List" aria-label="List view">☰</button><button data-v="grid" title="Grid" aria-label="Grid view">▦</button><button data-v="tiles" title="Tiles" aria-label="Tiles view">▪▪▪</button></div></div></div>
+    <select id="kind" aria-label="Item type" class="kindsel"><option value="all">All item types</option>${Object.entries(KINDS).map(([k, v]) => `<option value="${k}">${KIND_PL[k]}</option>`).join('')}</select>
     <label class="mall" id="mpall" hidden><span class="mk" id="mpmk"></span><b id="mpmt">Select all</b></label>
     <div id="list" class="grid"><p class="muted">Loading…</p></div>
     <div class="pickbar" id="mpbar" hidden><button class="btn" id="mpgo" disabled>Share selected (0)</button></div>`;
@@ -52,7 +55,8 @@ export async function viewMarket($app, setUnsub) {
     for (const id of [...sel]) if (!sellers.has(id)) sel.delete(id);
     sellerLabel();
   };
-  const base = () => (sel.size ? pool.filter((l) => sel.has(l.seller_id)) : pool);
+  const base = () => { let r = sel.size ? pool.filter((l) => sel.has(l.seller_id)) : pool; if (kindSel !== 'all') r = r.filter((l) => (l.kind || 'card') === kindSel); return r; };
+  { const ks = $app.querySelector('#kind'); ks.value = kindSel; ks.onchange = () => { kindSel = ks.value; sessionStorage.setItem('mkind', kindSel); paint(); }; }
   // spreadsheet-style picker: type to search, tick several sellers
   function sellerSheet() {
     const draft = new Set(sel);

@@ -35,7 +35,7 @@ export function receiptData(l, name) {
   const pd = priceDiff(l);
   return {
     no: `RCP-${ymd}-${String(l.id).replace(/-/g, '').slice(0, 6).toUpperCase()}`,
-    id: l.id, code: l.card_code, name: cleanName(name || l.card_name, l.card_code), rarity: l.rarity || '-', cond: l.condition, lang: l.language || '-',
+    id: l.id, code: l.card_code, name: cleanName(name || l.card_name, l.card_code), rarity: l.rarity || '-', cond: ['pack', 'box', 'case', 'slab', 'other'].includes(l.kind) ? '-' : l.condition, lang: l.language || '-',
     price: pd.final, listing: pd.listing, changed: pd.changed, delta: pd.delta, pct: pd.pct, type: l.type,
     seller: l.seller?.display_name || 'Seller', buyer: l.buyer?.display_name || 'Buyer', soldAt: l.sold_at || null,
     url: typeof location !== 'undefined' ? listingUrl(l.id) : '',

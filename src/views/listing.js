@@ -1,7 +1,7 @@
 import { addToCart, removeFromCart, inCart } from '../cart.js';
 import { waUrl, receiptData, msgInformSeller, msgInformBuyer, downloadReceipt, shareReceipt, canShareFiles, priceDiff, fmtDelta } from '../receipt.js';
 import { soldSheet } from '../sold.js';
-import { userMeta, starsHtml, tagsHtml, rateSheet, sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge, yuyuCard, yuyuFromImg } from '../lib.js';
+import { userMeta, starsHtml, tagsHtml, rateSheet, sb, state, esc, bnd, toast, guard, rpc, loadCatalog, refBnd, catImg, upImg, sharpen, listingImg, timerHtml, confirmSheet, promptSheet, signIn, enlarge, yuyuCard, yuyuFromImg, KINDS, SEALED_KINDS } from '../lib.js';
 
 export async function viewListing($app, id, setUnsub) {
   const cat = await loadCatalog();
@@ -18,7 +18,8 @@ export async function viewListing($app, id, setUnsub) {
     let sibs = [l.id], avail = 1;   // sibs = copies you can take now (up to 200 per purchase), avail = how many exist
     if (l.type === 'buy_now' && l.status === 'active' && state.user && state.user.id !== l.seller_id) {
       try {
-        const { data: s, count } = await sb.from('listings').select('id', { count: 'exact' }).eq('seller_id', l.seller_id).eq('card_ref', l.card_ref).eq('condition', l.condition).eq('language', l.language).eq('price', l.price).eq('type', 'buy_now').eq('status', 'active').order('created_at').limit(200);
+        let sq = sb.from('listings').select('id', { count: 'exact' }).eq('seller_id', l.seller_id); sq = l.card_ref ? sq.eq('card_ref', l.card_ref) : sq.is('card_ref', null).eq('kind', l.kind).eq('card_name', l.card_name).eq('card_code', l.card_code); if (!l.card_ref) sq = l.rarity ? sq.eq('rarity', l.rarity) : sq.is('rarity', null);
+        const { data: s, count } = await sq.eq('condition', l.condition).eq('language', l.language).eq('price', l.price).eq('type', 'buy_now').eq('status', 'active').order('created_at').limit(200);
         sibs = [l.id, ...(s || []).map((x) => x.id).filter((x) => x !== l.id)];
         avail = Math.max(count ?? 0, sibs.length);
       } catch { /* single copy */ }
@@ -68,9 +69,9 @@ export async function viewListing($app, id, setUnsub) {
     $app.innerHTML = `<p><a href="javascript:history.back()">← Back</a></p><div class="detail"><div>
       <img class="main${held ? ' held-img' : ''}" id="mainimg" src="${esc(small(photos[0] || ''))}" alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
       <div class="thumbs">${photos.length > 1 || l.photos?.length ? photos.map((p) => `<img src="${esc(thumb(p))}" data-src="${esc(p)}" alt="">`).join('') : ''}</div>
-      ${l.photos?.length ? '' : '<p class="muted">Catalogue image only. Ask the seller for photos of the actual card.</p>'}${yy ? `<p class="muted"><a href="${esc(yy)}" target="_blank" rel="noopener">🔗 View this card on Yuyutei</a></p>` : ''}</div>
+      ${l.photos?.length || !l.card_ref ? '' : '<p class="muted">Catalogue image only. Ask the seller for photos of the actual card.</p>'}${yy ? `<p class="muted"><a href="${esc(yy)}" target="_blank" rel="noopener">🔗 View this card on Yuyutei</a></p>` : ''}</div>
       <div><h1>${esc(c?.name || l.card_name)}</h1>
-      <p class="muted"><a href="#/card/${esc(l.card_code)}">${esc(l.card_code)}</a> · ${esc(l.rarity || '')} · ${esc((l.set_id || '').toUpperCase())} · Condition ${esc(l.condition)} · ${esc(l.language)}</p>
+      <p class="muted">${l.card_ref ? `<a href="#/card/${esc(l.card_code)}">${esc(l.card_code)}</a> · ${esc(l.rarity || '')} · ${esc((l.set_id || '').toUpperCase())} · Condition ${esc(l.condition)} · ${esc(l.language)}` : `<b>${esc(KINDS[l.kind] || 'Item')}</b>${['BOX', 'PACK', 'CASE', 'SLAB', 'PROMO', 'ITEM'].includes(l.card_code) ? '' : ' · ' + esc(l.card_code)}${l.rarity ? ' · ' + esc(l.rarity) : ''}${SEALED_KINDS.has(l.kind) ? '' : ' · Condition ' + esc(l.condition)} · ${esc(l.language)}`}</p>
       <p><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}"${held ? ' style="background:#a3a8b0;border-color:#a3a8b0"' : ''}>${held ? 'On hold' : l.type === 'auction' ? 'Auction' : 'Buy now'}</span></p>
       <p class="price" style="font-size:1.5rem">${bnd(shown)}</p>
       ${ref > 0 ? `<p class="muted">Reference ${bnd(ref)} (${yy ? `<a href="${esc(yy)}" target="_blank" rel="noopener">Yuyutei JP shop price ↗</a>` : 'Yuyutei JP shop price'})${l.type === 'buy_now' && diff !== null ? ` · ${diff <= 0 ? Math.abs(diff) + '% below' : diff + '% above'} reference` : ''}. Condition and local demand affect the real value.</p>` : ''}

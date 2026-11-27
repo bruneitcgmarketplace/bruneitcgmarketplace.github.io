@@ -118,3 +118,9 @@ input:focus,select:focus,textarea:focus { border-color:var(--sanji); box-shadow:
 img.held-img { filter:grayscale(1); opacity:.55; }
 .btn.held-btn, .btn.held-btn:disabled { background:#c9cdd3; border-color:#c9cdd3; color:#fff; opacity:1; filter:none; cursor:not-allowed; box-shadow:none; }
 .holdbox { margin-top:.6rem; padding:.7rem .85rem; border:1px solid #d5d8dd; background:#f3f4f6; color:#4b525c; border-radius:12px; font-size:.9rem; line-height:1.4; }
+
+/* manual item kinds (sell page chips, marketplace type filter) */
+.kinds{display:flex;flex-wrap:wrap;gap:.4rem;margin:.2rem 0 .8rem}
+.kinds button{border:1px solid #d7dbe3;background:#fff;color:#14213d;border-radius:999px;padding:.4rem .8rem;font:inherit;font-size:.85rem;font-weight:600}
+.kinds button.on{background:#c92532;border-color:#c92532;color:#fff}
+.kindsel{width:100%;margin:.2rem 0 .6rem}

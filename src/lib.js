@@ -229,8 +229,13 @@ export async function primeMeta(rows) {
 }
 // Identical Buy now offers (same seller, card, condition, language, price) become one tile with a quantity.
 // Held (reserved) copies only show on their own when nothing in that group is still free.
+// Manual items (sealed packs, boxes, cases, slabs, promo cards): not in the catalogue, so card_ref is empty.
+export const KINDS = { card: 'Single card', promo: 'Promo / other card', pack: 'Sealed pack', box: 'Booster box', case: 'Case', slab: 'Graded slab', other: 'Other' };
+export const SEALED_KINDS = new Set(['pack', 'box', 'case', 'slab', 'other']);   // no card condition
+export const condSfx = (l) => (SEALED_KINDS.has(l.kind) || !l.condition ? '' : ` · ${l.condition}`);
+export const itemKey = (l) => (l.card_ref ? l.card_ref : ['~', l.kind, l.card_name, l.rarity, l.card_code].join('~'));
 export function groupBuyNow(rows) {
-  const key = (l) => [l.seller_id, l.card_ref, l.condition, l.language, l.price].join('|');
+  const key = (l) => [l.seller_id, itemKey(l), l.condition, l.language, l.price].join('|');
   const free = new Set(rows.filter((l) => l.type === 'buy_now' && l.status === 'active').map(key));
   const seen = new Map(), out = [];
   for (const l of rows) {
@@ -246,7 +251,7 @@ export function listRow(l) {
   const ref = state.cat?.byRef.get(l.card_ref), p = listingPrice(l), held = l.type === 'buy_now' && l.status === 'reserved', m = state.umeta.get(l.seller_id);
   return `<a class="lrow${held ? ' held' : ''}" href="#/listing/${l.id}">
     <img loading="lazy" decoding="async" src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'">
-    <div class="lb"><div class="lt"><b>${esc(l.card_code)}</b> ${esc(l.rarity || '')} · ${esc(l.condition)}${l._n > 1 ? ` <span class="qtag s">×${l._n}</span>` : ''}${held ? ' <span class="badge">On hold</span>' : ''}</div>
+    <div class="lb"><div class="lt"><b>${esc(l.card_code)}</b> ${esc(l.rarity || '')}${esc(condSfx(l))}${l._n > 1 ? ` <span class="qtag s">×${l._n}</span>` : ''}${held ? ' <span class="badge">On hold</span>' : ''}</div>
       <div class="ln">${esc(ref?.name || l.card_name)}</div>
       <div class="lm">${esc(l.seller?.display_name || '')}${m && m.n ? ` · <span class="stars">★ ${m.avg.toFixed(1)}</span>` : ''}${l.type === 'auction' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : l._n > 1 ? ` · <span class="avail">${l._n} available</span>` : ''}</div></div>
     <div class="lp"><span class="price">${bnd(p)}</span><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span></div></a>`;
@@ -259,7 +264,7 @@ export function tile(l) {
   return `<a class="tile${held ? ' held' : ''}" href="#/listing/${l.id}">
     <img loading="lazy" decoding="async" src="${esc(listingImg(l))}" ${!l.photos?.length ? `data-hd="${esc(upImg(l.catalog_image, 'front'))}"` : ''} alt="${esc(l.card_code)}" onerror="this.style.visibility='hidden'">
     ${held ? '<span class="holdtag">On hold</span>' : ''}${l._n > 1 ? `<span class="qtag">×${l._n}</span>` : ''}
-    <div class="b"><div class="code">${esc(l.card_code)} · ${esc(l.rarity || '')} · ${esc(l.condition)}</div>
+    <div class="b"><div class="code">${esc([l.card_code, l.rarity].filter(Boolean).join(' · ') + condSfx(l))}</div>
     <div class="nm">${esc(ref?.name || l.card_name)}</div>
     <div class="row tight between"><span class="price">${bnd(p)}</span><span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span></div>
     ${l._n > 1 ? `<div class="avail">${l._n} available</div>` : ''}

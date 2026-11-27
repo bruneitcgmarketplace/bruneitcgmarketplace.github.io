@@ -1,4 +1,4 @@
-import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, sheet, rateSheet } from '../lib.js';
+import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, sheet, rateSheet, condSfx, itemKey } from '../lib.js';
 import { cardFilter } from './exploreSets.js';
 import { shareChoice } from './shared.js';
 import { fetchAll, catImg } from '../lib.js';
@@ -133,7 +133,7 @@ export async function viewOrders($app, opts = {}) {
     if (l.status === 'sold' && l.buyer_id && !grp) acts.push(myRated.has(l.id) ? ['rated', '✔ Rated', 'sec'] : ['rate', `⭐ Rate ${role === 'sell' ? 'buyer' : 'seller'}`, '']);
     return `<div class="order" data-id="${l.id}"><a href="#/listing/${l.id}" class="oimg"><img src="${esc(listingImg(l))}" alt="" onerror="this.style.visibility='hidden'"></a>
       <div class="grow"><div class="row tight between"><b>${esc(l.card_code)} ${esc(l.rarity || '')}</b>${l._ids?.length > 1 ? ` <span class="qtag s">×${l._ids.length}</span>` : ''}${stChip(l, uid, role)}</div>
-        <div class="muted nm">${esc(cleanName(c?.name || l.card_name, l.card_code))} · ${esc(l.condition)}</div>
+        <div class="muted nm">${esc(cleanName(c?.name || l.card_name, l.card_code))}${esc(condSfx(l))}</div>
         <div><span class="price">${bnd(pd ? pd.final : price)}</span> <span class="badge ${l.type === 'auction' ? 'auc' : 'bn'}">${l.type === 'auction' ? 'Auction' : 'Buy now'}</span>
           ${l.type === 'auction' && l.status === 'active' ? ` · ${l.bid_count} bids · ${timerHtml(l.ends_at)}` : ''}</div>
         ${pd ? (pd.changed ? `<div class="row tight" style="margin:.2rem 0"><span class="chip ${dcls}">${esc(fmtDelta(pd))} from listing price</span><span class="muted">Listing price ${bnd(pd.listing)}</span></div>` : '<div class="muted">Sold at the listing price</div>') : ''}
@@ -187,7 +187,7 @@ export async function viewOrders($app, opts = {}) {
     const data = [...live, ...(past.data || []).filter((l) => l.status === 'ended' || l.status === 'cancelled')];
     const g = (s) => (data || []).filter((l) => s.includes(l.status));
     // identical active Buy now listings (same card, condition, language, price) become one card with a quantity
-    const combine = (arr) => { const m = new Map(), out = []; for (const l of arr) { if (l.type !== 'buy_now' || l.status !== 'active') { out.push(l); continue; } const k = [l.card_ref, l.condition, l.language, l.price].join('|'); const g = m.get(k); if (g) g._ids.push(l.id); else { const r = { ...l, _ids: [l.id] }; m.set(k, r); out.push(r); } } return out; };
+    const combine = (arr) => { const m = new Map(), out = []; for (const l of arr) { if (l.type !== 'buy_now' || l.status !== 'active') { out.push(l); continue; } const k = [itemKey(l), l.condition, l.language, l.price].join('|'); const g = m.get(k); if (g) g._ids.push(l.id); else { const r = { ...l, _ids: [l.id] }; m.set(k, r); out.push(r); } } return out; };
     // held cards from the same buyer share ONE 'WhatsApp buyer' button
     const heldBy = new Map();
     for (const l of g(['reserved'])) { const k = l.buyer_id; if (!heldBy.has(k)) heldBy.set(k, []); heldBy.get(k).push(l); }

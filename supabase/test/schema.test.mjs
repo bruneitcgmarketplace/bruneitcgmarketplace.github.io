@@ -26,6 +26,8 @@ await db.exec(readFileSync(new URL('../15_moderation.sql', import.meta.url), 'ut
 await db.exec(readFileSync(new URL('../16_bulk_unlist.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../17_shared_market.sql', import.meta.url), 'utf8'));
 await db.exec(readFileSync(new URL('../18_public_sold.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../20_wa_country_code.sql', import.meta.url), 'utf8'));
+await db.exec(readFileSync(new URL('../21_listing_kinds.sql', import.meta.url), 'utf8'));
 await db.exec(`grant usage on schema public to anon, authenticated;
  grant select, insert, update, delete on all tables in schema public to anon, authenticated;
  grant usage, select on all sequences in schema public to anon, authenticated;
@@ -376,6 +378,35 @@ ok('new link differs after re-share', (await as(seller, `select share_inventory(
   ok('summary counts sold deals', (await as(null, `select public_sold_summary() s`)).rows[0].s.n >= 1);
   ok('paging offset works', (await as(null, `select count(*)::int c from public_sold(1000, 1000)`)).rows[0].c === 0);
   await admin(`delete from listings where id = $1`, [open]);
+}
+{
+  // WhatsApp: 7-digit Brunei numbers get 673
+  await as(buyer2, `select set_whatsapp('837 4424')`);
+  ok('7-digit number gets 673', (await admin(`select whatsapp w from private_profiles where id = $1`, [buyer2])).rows[0].w === '6738374424');
+  await as(buyer2, `select set_whatsapp('00673 837 4424')`);
+  ok('00 prefix stripped', (await admin(`select whatsapp w from private_profiles where id = $1`, [buyer2])).rows[0].w === '6738374424');
+  await as(buyer2, `select set_whatsapp('+60 123456789')`);
+  ok('foreign number kept', (await admin(`select whatsapp w from private_profiles where id = $1`, [buyer2])).rows[0].w === '60123456789');
+  await as(buyer2, `select set_whatsapp('6737123456')`);
+  ok('too-short number still rejected', await fails(buyer2, `select set_whatsapp('83744')`, [], 'valid WhatsApp'));
+  // manual listings (sealed, box, case, slab, promo)
+  const man = { kind: 'box', card_name: 'OP-13 Booster Box (JP, sealed)', type: 'buy_now', price: 180, photos: ['https://x/p.jpg'] };
+  const mk2 = async (u, o) => (await as(u, `select create_listing($1::jsonb) id`, [JSON.stringify({ ...man, ...o })])).rows[0].id;
+  const m1 = await mk2(seller, {});
+  const r1 = (await admin(`select * from listings where id = $1`, [m1])).rows[0];
+  ok('manual box: no card_ref, default code BOX, kind stored', r1.card_ref === null && r1.card_code === 'BOX' && r1.kind === 'box' && r1.catalog_image === null);
+  ok('manual item needs a photo', await fails(seller, `select create_listing($1::jsonb)`, [JSON.stringify({ ...man, photos: [] })], 'at least one photo'));
+  ok('manual item needs a name', await fails(seller, `select create_listing($1::jsonb)`, [JSON.stringify({ ...man, card_name: '  ' })], 'name'));
+  ok('invalid kind rejected', await fails(seller, `select create_listing($1::jsonb)`, [JSON.stringify({ ...man, kind: 'zzz' })], 'Invalid item type'));
+  ok('manual ignores a sent card_ref', (await admin(`select card_ref from listings where id = $1`, [await mk2(seller, { card_ref: 'op01-1' })])).rows[0].card_ref === null);
+  const m2 = await mk2(seller, { kind: 'slab', card_name: 'Luffy PSA', rarity: 'PSA 10', card_code: 'P-001', price: 250 });
+  const r2 = (await admin(`select * from listings where id = $1`, [m2])).rows[0];
+  ok('slab keeps grade and code', r2.rarity === 'PSA 10' && r2.card_code === 'P-001');
+  ok('normal card listing still works with kind card', (await admin(`select kind, card_ref from listings where id = $1`, [await lst(seller, { type: 'buy_now', price: 3 })])).rows[0].kind === 'card');
+  await as(buyer, `select buy_now($1)`, [m1]);
+  await as(seller, `select mark_sold($1)`, [m1]);
+  ok('manual item can be sold (no inventory touch)', (await admin(`select status from listings where id = $1`, [m1])).rows[0].status === 'sold');
+  await admin(`delete from listings where kind <> 'card' or price = 3`);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
