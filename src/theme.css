@@ -124,3 +124,8 @@ img.held-img { filter:grayscale(1); opacity:.55; }
 .kinds button{border:1px solid #d7dbe3;background:#fff;color:#14213d;border-radius:999px;padding:.4rem .8rem;font:inherit;font-size:.85rem;font-weight:600}
 .kinds button.on{background:#c92532;border-color:#c92532;color:#fff}
 .kindsel{width:100%;margin:.2rem 0 .6rem}
+
+/* notification inbox */
+.nitem{display:block;text-decoration:none;color:inherit;margin:.45rem 0;padding:.7rem .8rem}
+.nitem.unread{border-left:4px solid var(--luffy);background:#fff6f6}
+.nitem .muted{font-size:.8rem;white-space:nowrap}

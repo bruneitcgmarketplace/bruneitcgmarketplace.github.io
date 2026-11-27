@@ -2,9 +2,9 @@ import './style.css';
 import './theme.css';
 import { initLightbox } from './lightbox.js';
 import { viewCart } from './views/cart.js';
+import { viewNotifications } from './views/notifications.js';
 import { viewAccount } from './views/account.js';
 import { cartIds } from './cart.js';
-import { pushPrompt, syncPush } from './push.js';
 import { sb, configured, state, esc, loadMe, loadFx, loadCatalog, signIn, signOut, isMember, fmtLeft, initHd, avatarHtml } from './lib.js';
 import { viewShared } from './views/shared.js';
 import { viewSold } from './views/sold.js';
@@ -47,6 +47,7 @@ const MENU = [
 // Sell and Scan are not in this bar: Sell is on the My listings page and cards, Scan is on Home and My collection. Membership, Settings and Admin live under My account (top right)
 const menuKey = (page) => ({ listing: 'market', user: 'market', set: 'explore', card: 'explore', sell: 'mylistings', scan: 'inventory', membership: 'account', settings: 'account', admin: 'account', report: 'account', problems: 'account', shared: 'inventory', sold: 'home' }[page] || page || 'home');
 const ICON = {
+  bell: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
   user: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>',
   cart: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2.5l2.2 11h10.1l2-8H6.4"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></svg>',
 };
@@ -63,12 +64,26 @@ document.addEventListener('error', (e) => {
 }, true);
 window.addEventListener('cart-changed', () => { const el = document.getElementById('cart-n'); if (!el) return; const n = state.user ? cartIds().length : 0; el.textContent = n; el.hidden = !n; });
 
+let unreadN = 0;
+async function refreshBell() {
+  if (!state.user) { unreadN = 0; } else {
+    const { count, error } = await sb.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null);
+    if (error) return;
+    unreadN = count || 0;
+  }
+  const el = document.getElementById('bell-n'); if (!el) return;
+  el.textContent = unreadN > 99 ? '99+' : unreadN; el.hidden = !unreadN;
+}
+window.addEventListener('notif-refresh', refreshBell);
+setInterval(() => { if (!document.hidden) refreshBell(); }, 45000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBell(); });
 function renderChrome(page) {
   const cur = menuKey(page), signed = !!state.user;
   const items = MENU;
-  const n = signed ? cartIds().length : 0;
+  const n = signed ? cartIds().length : 0, bellN = signed ? unreadN : 0;
   $top.innerHTML = `<div class="top-row">
       <a class="brand" href="#/"><span class="b1">One Piece</span> <span class="b2">TCG</span><span class="betatag">BETA</span><small class="bnote">Customised for the Brunei market</small></a><span class="grow"></span>
+      ${signed ? `<a class="ic-btn ${page === 'notifications' ? 'on' : ''}" href="#/notifications" aria-label="Notifications" title="Notifications">${ICON.bell}<span class="cart-n" id="bell-n" ${bellN ? '' : 'hidden'}>${bellN > 99 ? '99+' : bellN}</span></a>` : ''}
       <a class="ic-btn ${cur === 'account' ? 'on' : ''}" href="#/account" aria-label="My account" title="My account">${signed ? avatarHtml('sm') : ICON.user}</a>
       <a class="ic-btn ${cur === 'cart' ? 'on' : ''}" href="#/cart" aria-label="View my cart" title="My cart">${ICON.cart}<span class="cart-n" id="cart-n" ${n ? '' : 'hidden'}>${n}</span></a>
     </div>
@@ -93,6 +108,7 @@ async function route() {
   const [path] = location.hash.slice(2).split('?');
   const [page, arg] = path.split('/');
   renderChrome(page);
+  refreshBell();
   window.scrollTo(0, 0);
   if (!configured) { $app.innerHTML = `<div class="panel"><h1>Setup needed</h1><p>Add the Supabase keys (see README), then rebuild.</p></div>`; return; }
   const ok = () => my === seq; // drop stale async renders
@@ -104,6 +120,7 @@ async function route() {
       case 'explore': await viewExplore(target); break;
       case 'market': await viewMarket(target, (fn) => { if (ok()) unsub = fn; else fn(); }); break;
       case 'cart': await viewCart(target); break;
+      case 'notifications': await viewNotifications(target); break;
       case 'account': await viewAccount(target); break;
       case 'mylistings': await viewOrders(target, { only: 'selling' }); break;
       case 'set': await viewSet(target, arg); break;
@@ -137,9 +154,8 @@ async function boot() {
   sb.auth.onAuthStateChange(async (_e, session) => {
     const changed = (session?.user?.id || null) !== (state.user?.id || null);
     state.user = session?.user || null;
-    if (changed) { await loadMe(); route(); syncPush(); pushPrompt(); }
+    if (changed) { await loadMe(); route(); }
   });
   route();
-  syncPush(); pushPrompt();
 }
 boot();
