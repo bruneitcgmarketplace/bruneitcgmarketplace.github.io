@@ -129,7 +129,7 @@ export async function viewMarket($app, setUnsub) {
     const n = (l) => (l._ids ? l._ids.length : 1);
     const where = type === 'auction' ? 'Auctions' : 'Buy now';
     const one = sel.size === 1 ? [...sel][0] : null, sname = one ? sellers.get(one)?.name : '';
-    const lines = rows.slice(0, 15).map((l) => `• ${l.card_code} ${l.rarity || ''} ${l.card_name || ''}${n(l) > 1 ? ' ×' + n(l) : ''} · ${bnd(listingPrice(l))}${l.seller?.display_name && !one ? ' · ' + l.seller.display_name : ''}\n  ${base}listing/${l.id}`);
+    const lines = rows.slice(0, 15).map((l) => `• ${l.card_code} ${l.rarity || ''} ${l.card_name || ''}${n(l) > 1 ? ' ×' + n(l) : ''} · ${bnd(listingPrice(l))}\n  ${base}listing/${l.id}`);
     const link = one ? `${base}user/${one}` : `${base}market?type=${type}`;
     const text = `${where} on Brunei One Piece TCG${sname ? ' from ' + sname : ''} (${rows.length} listing${rows.length === 1 ? '' : 's'}${activeCount(mf) ? ', filtered' : ''}):\n${lines.join('\n')}${rows.length > 15 ? `\n…and ${rows.length - 15} more` : ''}\n\n${one ? 'All from this seller' : 'Marketplace'}: ${link}`;
     const pics = rows.map((l) => { const c = cat.byRef.get(l.card_ref); return { url: c ? catImg(c, '200_280') : (l.catalog_image || ''), qty: n(l) > 1 ? `×${n(l)}` : '', price: 'BND ' + listingPrice(l).toFixed(2) }; }).filter((x) => x.url);
