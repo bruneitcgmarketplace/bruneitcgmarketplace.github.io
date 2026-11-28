@@ -220,12 +220,12 @@ export function zoomViewer(url) {
 }
 
 // Preview the message (editable), then send to WhatsApp / copy / system share. pics (optional) adds a one-page picture of the cards.
-export function shareComposer(title, text, pics = null, sub = '', link = '', imgTitle = '') {
+export function shareComposer(title, text, pics = null, sub = '', link = '', imgTitle = '', num = '') {
   const s = sheet(`<h2>${esc(title)}</h2><textarea id="sc-t" rows="7" style="width:100%">${esc(text)}</textarea>
     ${pics?.length ? `<div id="sc-pic" class="muted" style="margin:.5rem 0">Making the picture of ${pics.length} card${pics.length === 1 ? '' : 's'}…</div>` : ''}
     <div class="row tight" style="margin-top:.6rem">${pics?.length ? '<button class="btn" id="sc-img" disabled>📷 Share picture + link</button><button class="btn sec" id="sc-save" disabled>Save picture</button>' : ''}<a class="btn ${pics?.length ? 'sec' : ''}" id="sc-wa" target="_blank" rel="noopener">WhatsApp (text)</a><button class="btn sec" id="sc-copy">Copy</button>${navigator.share ? '<button class="btn sec" id="sc-nat">Share…</button>' : ''}</div>`);
   const t = s.el.querySelector('#sc-t'), wa = s.el.querySelector('#sc-wa');
-  const sync = () => { wa.href = 'https://wa.me/?text=' + encodeURIComponent(t.value); };
+  const sync = () => { wa.href = 'https://wa.me/' + String(num || '').replace(/\D/g, '') + '?text=' + encodeURIComponent(t.value); };
   t.oninput = sync; sync();
   s.el.querySelector('#sc-copy').onclick = async () => { try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } toast('Copied'); };
   const n = s.el.querySelector('#sc-nat'); if (n) n.onclick = () => navigator.share({ text: t.value }).catch(() => {});

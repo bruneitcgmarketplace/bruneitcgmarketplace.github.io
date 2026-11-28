@@ -1,6 +1,6 @@
 import { sb, state, esc, bnd, toast, guard, rpc, loadCatalog, listingImg, listingPrice, timerHtml, needLogin, bindLogin, confirmSheet, sheet, rateSheet, condSfx, itemKey } from '../lib.js';
 import { cardFilter } from './exploreSets.js';
-import { shareChoice } from './shared.js';
+import { shareChoice, shareComposer } from './shared.js';
 import { fetchAll, catImg } from '../lib.js';
 import { waUrl, receiptData, msgInformSeller, msgInformSellerMany, msgMeetBuyerMany, listPrice, msgInformBuyer, cleanName, receiptDataMany, msgInformBuyerMany, downloadReceiptMany, downloadReceipt, priceDiff, finalPrice, fmtDelta, reportModel, reportCsv, reportPdf, downloadBlob, downloadText } from '../receipt.js';
 import { soldSheet } from '../sold.js';
@@ -197,7 +197,7 @@ export async function viewOrders($app, opts = {}) {
       const items = arr.map((l) => receiptData(l, state.cat.byRef.get(l.card_ref)?.name || l.card_name));
       const total = items.reduce((a, d) => a + Number(d.price || 0), 0);
       return `<div class="notice" data-gb="${esc(String(bk))}"><b>On hold: Buyer ${esc(arr[0].buyer?.display_name || '')}</b> · ${arr.length} card${arr.length > 1 ? 's' : ''} · ${bnd(total)}<br>Contact the buyer on WhatsApp. After the meet-up and payment, tap Sold.
-        ${ct ? `<br><a class="btn sm-btn" target="_blank" rel="noopener" href="${waUrl(ct.whatsapp, msgMeetBuyerMany(items, ct.display_name))}">💬 WhatsApp buyer</a>` : ''}<div class="row tight" style="margin-top:.5rem"><button class="btn ok" data-gact="sold">Sold</button><button class="btn sec" data-gact="release">Release</button><button class="btn bad" data-gact="noshow">Release + strike buyer</button></div></div>`;
+        ${ct ? `<br><button class="btn sm-btn" data-wab="1">💬 WhatsApp buyer</button>` : ''}<div class="row tight" style="margin-top:.5rem"><button class="btn ok" data-gact="sold">Sold</button><button class="btn sec" data-gact="release">Release</button><button class="btn bad" data-gact="noshow">Release + strike buyer</button></div></div>`;
     }))).join('');
     const sect = async (t, arr, empty) => `<h2>${t}</h2>${arr.length ? (await Promise.all(combine(arr).map((l) => card(l, 'sell')))).join('') : `<p class="muted">${empty}</p>`}`;
     body.innerHTML = `${only ? '' : '<p><a class="btn" href="#/sell">+ New listing</a></p>'}${(await sect('Needs settlement', g(['reserved']), 'None.')).replace('</h2>', '</h2>' + heldPanels)}<div style="height:.8rem"></div>${g(['active']).some((l) => l.type === 'buy_now') ? '<div class="unl" id="unl"><button class="btn sec sm-btn" id="unsel" disabled>Unlist selected (0)</button><button class="btn sec sm-btn" id="unpick">Select all</button><button class="btn bad sm-btn" id="unall">Unlist all</button><button class="btn sm-btn" id="unshare">Share</button></div>' : ''}${await sect('Active listings', g(['active']), 'No active listings.')}<div style="height:.8rem"></div>${await sect('Ended and cancelled', g(['ended', 'cancelled']).slice(0, 15), 'None.')}`;
@@ -229,6 +229,14 @@ export async function viewOrders($app, opts = {}) {
     try { for (const { l } of pick) { await rpc('cancel_reservation', { p_listing: l.id }); n++; } }
     catch (e) { toast(`${n} of ${pick.length} cancelled, then: ${e.message || e}`, true); viewOrders($app, opts); return; }
     toast(`Done: ${n} reservation${n > 1 ? 's' : ''} cancelled`); viewOrders($app, opts);
+  })));
+  // WhatsApp buyer: message + one-page picture of the cards (wa.me links cannot carry an image)
+  body.querySelectorAll('[data-wab]').forEach((b) => (b.onclick = guard(async () => {
+    const arr = HELD.get(b.closest('[data-gb]').dataset.gb) || []; if (!arr.length) return;
+    const ct = await contactOf(arr[0]); if (!ct) return;
+    const items = arr.map((l) => receiptData(l, state.cat.byRef.get(l.card_ref)?.name || l.card_name));
+    const pics = arr.map((l) => { const c = state.cat?.byRef.get(l.card_ref); return { url: c ? catImg(c, '200_280') : (l.photos?.[0] || l.catalog_image || ''), qty: '', price: 'BND ' + Number(listPrice(l)).toFixed(2) }; }).filter((p) => p.url);
+    shareComposer('WhatsApp buyer', msgMeetBuyerMany(items, ct.display_name), pics, `${arr.length} card${arr.length === 1 ? '' : 's'}`, '', `${arr[0].buyer?.display_name || 'Buyer'} order`, ct.whatsapp);
   })));
   body.querySelectorAll('[data-gact]').forEach((b) => (b.onclick = guard(async () => {
     const a = b.dataset.gact, arr = HELD.get(b.closest('[data-gb]').dataset.gb) || [];
