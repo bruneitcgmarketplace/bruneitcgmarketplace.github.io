@@ -1,5 +1,6 @@
 import { waUrl } from '../receipt.js';
 import { cardFilter } from './exploreSets.js';
+import { addToCart, cartIds } from '../cart.js';
 import { sb, state, esc, bnd, toast, guard, sheet, loadCatalog, cardImg, refBnd, enlarge, confirmSheet } from '../lib.js';
 
 export const shareUrl = (token) => `${location.origin}${location.pathname}#/shared/${token}`;
@@ -55,20 +56,26 @@ export async function viewShared($app, token) {
   const picked = new Set();
   let view = localStorage.getItem('view_shr') || 'grid', q = '', sort = 'code';
   const sorters = { code: (a, b) => a.c.code.localeCompare(b.c.code) || a.c.ref.localeCompare(b.c.ref), value: (a, b) => b.q * refBnd(b.c) - a.q * refBnd(a.c), qty: (a, b) => b.q - a.q, name: (a, b) => a.c.name.localeCompare(b.c.name) };
-  const sel = (r) => r.l ? `<a class="btn sm-btn" href="#/listing/${r.l.id}">On Marketplace · ${bnd(r.l.price)}${r.l.n > 1 ? ' · ' + r.l.n + ' avail' : ''}</a>` : mine ? '' : `<label class="usel"><input type="checkbox" data-pick ${picked.has(r.c.ref) ? 'checked' : ''}> Select</label>`;
+  const sel = (r) => (mine ? '' : `<label class="usel"><input type="checkbox" data-pick ${picked.has(r.c.ref) ? 'checked' : ''}> Select</label>`) + (r.l ? `<a class="btn sm-btn" href="#/listing/${r.l.id}">On Marketplace · ${bnd(r.l.price)}${r.l.n > 1 ? ' · ' + r.l.n + ' avail' : ''}</a>` : '');
   const gridCell = (r) => `<div class="tile" data-ref="${esc(r.c.ref)}"><div data-zoom>${cardImg(r.c)}</div><div class="b"><div class="code">${esc(r.c.code)} · ${esc(r.c.rarity)}</div><div class="nm">${esc(r.c.name)}</div><div class="row tight between"><span class="price">${r.c.jpy ? bnd(refBnd(r.c)) : ''}</span><b>×${r.q}</b></div>${sel(r)}</div></div>`;
   const listRow = (r) => `<div class="inv-row shr" data-ref="${esc(r.c.ref)}"><div class="img" data-zoom>${cardImg(r.c, 'sm')}</div><div class="grow"><div><b>${esc(r.c.code)}</b> ${esc(r.c.rarity)} <b>×${r.q}</b></div><div class="muted nm">${esc(r.c.name)}</div><div class="muted">${r.c.jpy ? bnd(refBnd(r.c)) + ' ea' : 'No price'}</div><div class="shact">${sel(r)}</div></div></div>`;
   const shell = `<div class="head"><h1>${esc(data.owner)}’s collection</h1></div>
     <div class="hero small"><div class="muted">Shared collection${mine ? ' (yours)' : ''}</div><div class="big-num">${count} cards</div><div class="muted">${rows.length} unique</div></div>
     ${rows.length ? `<div class="panel"><div class="row"><input id="sq" placeholder="Search cards"><select id="ssort"><option value="code">Sort: Card code</option><option value="qty">Sort: Quantity</option><option value="name">Sort: Name</option></select></div>
       <div class="row tight" style="margin-top:.5rem"><button class="btn sec" id="sfb"></button><div class="vsw" id="svw"><button data-v="list" aria-label="List">☰</button><button data-v="grid" aria-label="Grid">▦</button><button data-v="tiles" aria-label="Tiles">▪▪▪</button></div></div></div>
-      <div id="sbody"></div>${!mine && rows.some((r) => !r.l) ? '<div class="pickbar"><button class="btn sec" id="pk-all">Select all not listed</button><button class="btn" id="pk-go" disabled>Contact collector (0)</button></div>' : ''}` : '<div class="panel center"><p class="muted">This collection is empty.</p></div>'}`;
+      <div id="sbody"></div>${!mine ? '<div class="pickbar shbar"><button class="btn sec" id="pk-all">Select all</button><button class="btn" id="pk-cart" disabled>Add to cart (0)</button><button class="btn" id="pk-go" disabled>Contact collector (0)</button><small class="muted">Cards on the Marketplace go to your cart. Cards not listed go to the collector on WhatsApp.</small></div>' : ''}` : '<div class="panel center"><p class="muted">This collection is empty.</p></div>'}`;
   $app.innerHTML = shell;
   if (!rows.length) return;
   const $ = (s) => $app.querySelector(s);
-  const go = $('#pk-go'), all = $('#pk-all');
+  const go = $('#pk-go'), all = $('#pk-all'), cartB = $('#pk-cart');
   let shown = [];
-  const upd = () => { if (!go) return; const n = picked.size; go.textContent = `Contact collector (${n})`; go.disabled = !n; const sh = shown.filter((r) => !r.l); all.textContent = sh.length && sh.every((r) => picked.has(r.c.ref)) ? 'Clear' : 'Select all not listed'; };
+  const upd = () => {
+    if (!go) return;
+    const pk = rows.filter((r) => picked.has(r.c.ref)), nc = pk.filter((r) => r.l).length, nn = pk.length - nc;
+    cartB.textContent = `Add to cart (${nc})`; cartB.disabled = !nc;
+    go.textContent = `Contact collector (${nn})`; go.disabled = !nn;
+    all.textContent = shown.length && shown.every((r) => picked.has(r.c.ref)) ? `Deselect all (${shown.length})` : `Select all (${shown.length})`;
+  };
   const draw = () => {
     let list = rows.filter((r) => !q || (r.c.code + ' ' + r.c.name + ' ' + (r.c.jp || '')).toLowerCase().includes(q.toLowerCase()));
     if (cf.on()) { const ok = cf.pass(new Set(list.map((r) => r.c.ref))); list = list.filter((r) => ok.has(r.c.ref)); }
@@ -86,10 +93,18 @@ export async function viewShared($app, token) {
   $('#sfb').onclick = () => cf.open(() => { const ok = cf.pass(new Set(rows.map((r) => r.c.ref))); return rows.filter((r) => !cf.on() || ok.has(r.c.ref)).length; });
   await cf.ensure();
   draw();
-  if (all) all.onclick = () => { const sh = shown.filter((r) => !r.l); const on = !(sh.length && sh.every((r) => picked.has(r.c.ref))); sh.forEach((r) => (on ? picked.add(r.c.ref) : picked.delete(r.c.ref))); draw(); };
+  if (all) all.onclick = () => { const on = !(shown.length && shown.every((r) => picked.has(r.c.ref))); shown.forEach((r) => (on ? picked.add(r.c.ref) : picked.delete(r.c.ref))); draw(); };
+  if (cartB) cartB.onclick = guard(async () => {
+    if (!state.user) { toast('Sign in to add cards to your cart'); location.hash = '#/account'; return; }
+    const pk = rows.filter((r) => picked.has(r.c.ref) && r.l); if (!pk.length) return;
+    const have = new Set(cartIds()); let added = 0;
+    for (const r of pk) if (!have.has(r.l.id)) { addToCart(r.l.id); added++; }
+    toast(added ? `Added ${added} card${added === 1 ? '' : 's'} to your cart` : 'Already in your cart');
+    if (added) location.hash = '#/cart';
+  });
   if (go) go.onclick = guard(async () => {
     if (!state.user) { toast('Sign in to contact the collector'); location.hash = '#/account'; return; }
-    const pick = rows.filter((r) => picked.has(r.c.ref)).sort(sorters.code); if (!pick.length) return;
+    const pick = rows.filter((r) => picked.has(r.c.ref) && !r.l).sort(sorters.code); if (!pick.length) return;
     const { data: ct, error: ce } = await sb.rpc('shared_contact', { p_token: token });
     if (ce) throw new Error(ce.message);
     const c0 = Array.isArray(ct) ? ct[0] : ct;

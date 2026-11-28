@@ -129,3 +129,5 @@ img.held-img { filter:grayscale(1); opacity:.55; }
 .nitem{display:block;text-decoration:none;color:inherit;margin:.45rem 0;padding:.7rem .8rem}
 .nitem.unread{border-left:4px solid var(--luffy);background:#fff6f6}
 .nitem .muted{font-size:.8rem;white-space:nowrap}
+
+.shbar{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;background:#fff;border:1px solid var(--line);border-radius:14px;padding:.5rem;box-shadow:0 6px 24px #0000002e}.shbar #pk-all{grid-column:1/-1}.shbar small{grid-column:1/-1;text-align:center;font-size:.72rem;line-height:1.25}.shbar .btn{padding:.55rem .4rem;font-size:.85rem}
