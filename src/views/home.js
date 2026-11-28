@@ -25,7 +25,7 @@ export async function viewHome($app) {
       const now = new Date().toISOString();
       const [inv, listings, auctions, listingCount, auctionCount, soldSum] = await Promise.all([
         signed ? loadInv(true).catch(() => null) : null,
-        sb.from('listings').select('*').eq('status','active').eq('type','buy_now').order('created_at',{ascending:false}).limit(1000),
+        sb.from('listings').select('*').eq('status','active').eq('type','buy_now').order('price',{ascending:false}).order('created_at',{ascending:false}).limit(1000),
         sb.from('listings').select('*').eq('status','active').eq('type','auction').gt('ends_at',now).order('ends_at').limit(100),
         sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','buy_now'),
         sb.from('listings').select('id',{count:'exact',head:true}).eq('status','active').eq('type','auction').gt('ends_at',now),

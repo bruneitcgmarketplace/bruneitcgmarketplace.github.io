@@ -187,8 +187,7 @@ export function bindLogin(root = document) { const b = root.querySelector('#logi
 export async function loadInv(force = false) {
   if (!state.user) return new Map();
   if (state.inv && !force) return state.inv;
-  const { data, error } = await sb.from('inventory').select('card_ref, qty, updated_at').limit(5000);
-  if (error) throw error;
+  const data = await fetchAll(() => sb.from('inventory').select('card_ref, qty, updated_at').order('card_ref'));   // the server returns at most 1000 rows per request
   state.inv = new Map((data || []).map((r) => [r.card_ref, r.qty]));
   state.invAt = new Map((data || []).map((r) => [r.card_ref, Date.parse(r.updated_at) || 0]));   // when each card was last added or changed
   return state.inv;

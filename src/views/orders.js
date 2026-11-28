@@ -76,7 +76,7 @@ export async function viewOrders($app, opts = {}) {
   let HELDB = new Map();  // seller id -> held cards (buyer view)
   let HELD = new Map();   // buyer id -> held cards (seller view)
   let myRated = new Set();   // sold deals I already rated
-  try { myRated = new Set(((await sb.from('ratings').select('listing_id').eq('rater_id', uid).limit(2000)).data || []).map((r) => r.listing_id)); } catch {}
+  try { myRated = new Set((await fetchAll(() => sb.from('ratings').select('listing_id').eq('rater_id', uid).order('id'))).map((r) => r.listing_id)); } catch {}
   const PER = { all: 'All time', month: 'This month', last: 'Last month', ytd: 'This year' };
   const inPeriod = (l, per) => {
     const d = new Date(l.sold_at || l.created_at), now = new Date(), y = now.getFullYear(), m = now.getMonth(), lm = new Date(y, m - 1, 1);
@@ -283,7 +283,7 @@ export async function viewOrders($app, opts = {}) {
   await cf.ensure(); applyF();
   body.querySelectorAll('[data-rp]').forEach((b) => (b.onclick = guard(async () => {
     const role = b.dataset.role, per = body.querySelector('#rp-per').value;
-    const { data } = await sb.from('listings').select(sel).eq(role === 'sell' ? 'seller_id' : 'buyer_id', uid).eq('status', 'sold').limit(2000);
+    const data = await fetchAll(() => sb.from('listings').select(sel).eq(role === 'sell' ? 'seller_id' : 'buyer_id', uid).eq('status', 'sold').order('id'));
     const rows = (data || []).filter((l) => inPeriod(l, per));
     if (!rows.length) { toast('No completed orders in this period', true); return; }
     const m = reportModel(rows, role, (l) => state.cat.byRef.get(l.card_ref)?.name || l.card_name);
